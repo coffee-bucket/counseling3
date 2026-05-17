@@ -111,7 +111,7 @@ const clsRef=cls=>db.collection('classes').doc(String(cls));
 const emptyMock=()=>({guk:{name:'',grad:'',pct:''},su:{name:'',grad:'',pct:''},yeong:{grad:'',pct:''},tan1:{name:'',grad:'',pct:''},tan2:{name:'',grad:'',pct:''}});
 const defaultGrades=()=>({jeonGwaGyo:'',guksuYeongSa:'',guksuYeongGwa:'',tanAvg:'',suneungGrad:{guk:'',su:'',yeong:'',tan1:'',tan2:''},suneungPct:{guk:'',su:'',tan1:'',tan2:''},mockScores:{june:emptyMock(),sep:emptyMock()}});
 const defRes=yr=>({year:yr,rate:'',chungwon:'',avg:'',cut70:''});
-const defSusi=()=>({id:uid(),category:'4년제',univ:'',jType:'교과',jName:'',major:'',capacity:'',ratio:{naesin:'',seoryu:'',myeon:'',gita:''},results:[defRes('25'),defRes('24'),defRes('23')],suneungMin:'',difficulty:'',schedule:{apply:'',step1:'',interview:'',final:''},note:''});
+const defSusi=()=>({id:uid(),category:'4년제',univ:'',jType:'교과',jName:'',major:'',capacity:'',ratio:{naesin:'',seoryu:'',myeon:'',gita:''},results:[defRes('26'),defRes('25'),defRes('24')],suneungMin:'',difficulty:'',schedule:{apply:'',step1:'',interview:'',final:''},note:''});
 const defJ=(gun,no)=>({id:uid(),gun,no,univ:'',major:'',result2026:'',result2025:'',difficulty:'',note:''});
 const defStudent=s=>({...s,susiMemo:'',jungsiMemo:'',specialNote:'',counselingDate:'',completed:false,grades:defaultGrades(),susiList:[defSusi(),defSusi(),defSusi()],jungsiList:[defJ('가',1),defJ('가',2),defJ('가',3),defJ('나',1),defJ('나',2),defJ('나',3),defJ('다',1),defJ('다',2),defJ('다',3)]});
 
@@ -251,7 +251,7 @@ function BulkAccountModal({students,cls,projectId,onClose}){
         }
       }
       setProgress(Math.round((i+1)/toCreate.length*100));
-      if(i<toCreate.length-1)await sleep(2500);
+      if(i<toCreate.length-1)await sleep(1200);
     }
     setResults(newResults);setErrors(newErrors);setPhase('done');};
 
@@ -290,8 +290,8 @@ function GradeSection({grades,onChange}){
   const namedSubjects=new Set(['guk','su','tan1','tan2']);
   const set=(k,v)=>onChange({...g,[k]:v});const setN=(obj,k,v)=>onChange({...g,[obj]:{...(g[obj]||{}),[k]:v}});
   const setMock=(exam,subj,key,v)=>onChange({...g,mockScores:{...(g.mockScores||{}),[exam]:{...((g.mockScores||{})[exam]||{}),[subj]:{...(((g.mockScores||{})[exam]||{})[subj]||{}),[key]:v}}}});
-  const GI=({field,label})=>(<div style={{flex:1,minWidth:60}}><div className="mini-label">{label}</div><input value={g[field]||''} onChange={e=>set(field,e.target.value)} style={{width:'100%',textAlign:'center',background:'#fef9c3',fontWeight:700,fontSize:15,padding:'5px 2px'}}/></div>);
-  const MI=({exam,subj,label})=>{const v=g.mockScores?.[exam]?.[subj]||{};const hasName=namedSubjects.has(subj);return(<div style={{minWidth:hasName?162:118}}>
+  const renderGI=(field,label)=>(<div key={field} style={{flex:1,minWidth:60}}><div className="mini-label">{label}</div><input value={g[field]||''} onChange={e=>set(field,e.target.value)} style={{width:'100%',textAlign:'center',background:'#fef9c3',fontWeight:700,fontSize:15,padding:'5px 2px'}}/></div>);
+  const renderMI=(exam,subj,label)=>{const v=g.mockScores?.[exam]?.[subj]||{};const hasName=namedSubjects.has(subj);return(<div key={subj} style={{minWidth:hasName?162:118}}>
     <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:2}}>
       <div className="mini-label" style={{textAlign:'left',paddingLeft:2,fontWeight:700,color:'var(--gray-500)',marginBottom:0,flexShrink:0}}>{label}</div>
       {hasName&&<input value={v.name||''} onChange={e=>setMock(exam,subj,'name',e.target.value)} placeholder="과목명" style={{flex:1,minWidth:0,fontSize:11,padding:'3px 5px',borderRadius:4}}/>}
@@ -301,15 +301,15 @@ function GradeSection({grades,onChange}){
       <input value={v.pct||''} onChange={e=>setMock(exam,subj,'pct',e.target.value)} placeholder="백분위" style={{width:'100%',textAlign:'center',fontSize:12,padding:'5px 2px'}}/>
     </div>
   </div>);};
-  const MockBlock=({exam,title})=>(<div style={{border:'1px solid var(--gray-200)',borderRadius:8,padding:'10px 12px',background:'#fbfdff'}}>
+  const renderMockBlock=(exam,title)=>(<div key={exam} style={{border:'1px solid var(--gray-200)',borderRadius:8,padding:'10px 12px',background:'#fbfdff'}}>
     <div style={{fontSize:12,color:'var(--gray-700)',fontWeight:700,marginBottom:8}}>{title}</div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(118px,1fr))',gap:8}}>{subjects.map(([k,l])=><MI key={k} exam={exam} subj={k} label={l}/>)}</div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(118px,1fr))',gap:8}}>{subjects.map(([k,l])=>renderMI(exam,k,l))}</div>
   </div>);
   return(<div className="section-box"><div className="section-title">📊 내신 및 수능 성적</div>
-    <div style={{display:'flex',gap:6,marginBottom:12}}><GI field="jeonGwaGyo" label="전교과"/><GI field="guksuYeongSa" label="국수영사"/><GI field="guksuYeongGwa" label="국수영과"/><GI field="tanAvg" label="탐구평균"/></div>
+    <div style={{display:'flex',gap:6,marginBottom:12}}>{[['jeonGwaGyo','전교과'],['guksuYeongSa','국수영사'],['guksuYeongGwa','국수영과'],['tanAvg','탐구평균']].map(([field,label])=>renderGI(field,label))}</div>
     <div style={{display:'grid',gap:10}}>
-      <MockBlock exam="june" title="6월 모의고사"/>
-      <MockBlock exam="sep" title="9월 모의고사"/>
+      {renderMockBlock('june','6월 모의고사')}
+      {renderMockBlock('sep','9월 모의고사')}
     </div></div>);}
 
 /* ── Susi Entry Row ── */
@@ -317,6 +317,7 @@ function SusiEntryRow({entry,onChange,onDelete}){
   const set=(k,v)=>onChange({...entry,[k]:v});const setR=(k,v)=>onChange({...entry,ratio:{...entry.ratio,[k]:v}});
   const setSc=(k,v)=>onChange({...entry,schedule:{...entry.schedule,[k]:v}});
   const setRes=(i,k,v)=>{const r=[...entry.results];r[i]={...r[i],[k]:v};onChange({...entry,results:r});};
+  const resultYears=['26','25','24'];
   const cat=entry.category==='전문대'?'susi-entry cat-전문대':'susi-entry cat-4year';
   return(<div className={cat}>
     <div className="susi-row">
@@ -338,8 +339,8 @@ function SusiEntryRow({entry,onChange,onDelete}){
     </div>
     <div className="susi-row" style={{marginBottom:4}}>
       <span style={{fontSize:11,color:'var(--gray-500)',whiteSpace:'nowrap',fontWeight:600}}>입시결과</span>
-      {(entry.results||[]).map((r,i)=>(<div key={i} className="result-block"><span style={{fontSize:11,fontWeight:700,color:'var(--gray-600)',marginRight:2}}>{r.year}년</span>
-        {[['경쟁률','rate',46],['충원','chungwon',38],['평균','avg',42],['70%','cut70',42]].map(([l,k,w])=>(<div key={k} style={{textAlign:'center'}}><div className="mini-label">{l}</div><input value={r[k]||''} onChange={e=>setRes(i,k,e.target.value)} style={{width:w,textAlign:'center',fontSize:11,padding:'3px 2px'}}/></div>))}
+      {(entry.results||[]).slice(0,3).map((r,i)=>(<div key={i} className="result-block"><span style={{fontSize:11,fontWeight:700,color:'var(--gray-600)',marginRight:2}}>{resultYears[i]||r.year}년</span>
+        {[['경쟁률','rate',46],['충원(인원)율','chungwon',72],['평균등급','avg',54],['70% 등급','cut70',56]].map(([l,k,w])=>(<div key={k} style={{textAlign:'center'}}><div className="mini-label">{l}</div><input value={r[k]||''} onChange={e=>setRes(i,k,e.target.value)} style={{width:w,textAlign:'center',fontSize:11,padding:'3px 2px'}}/></div>))}
       </div>))}
     </div>
     <div className="susi-row" style={{marginBottom:4}}>
@@ -378,11 +379,11 @@ function PrintView({data,cls}){
     <div className="sec-title">📊 내신 및 수능 성적</div>
     <table className="grade-tbl" style={{marginBottom:8}}><thead><tr><th>전교과</th><th>국수영사</th><th>국수영과</th><th>탐구평균</th></tr></thead>
     <tbody><tr><td className="grade-val">{g.jeonGwaGyo||'-'}</td><td className="grade-val">{g.guksuYeongSa||'-'}</td><td className="grade-val">{g.guksuYeongGwa||'-'}</td><td className="grade-val">{g.tanAvg||'-'}</td></tr></tbody></table>
-    <table className="grade-tbl" style={{marginBottom:8}}><thead><tr><th>시험</th><th>국어 등/%</th><th>수학 등/%</th><th>영어 등/%</th><th>탐구1 등/%</th><th>탐구2 등/%</th></tr></thead>
+    <table className="grade-tbl" style={{marginBottom:8}}><thead><tr><th>시험</th>{['국어','수학','영어','탐구1','탐구2'].map(h=><th key={h} style={{minWidth:70,lineHeight:1.25,whiteSpace:'normal'}}>{h}<br/>등급/백분위</th>)}</tr></thead>
     <tbody>{['june','sep'].map(exam=><tr key={exam}><td className="gun-cell">{exam==='june'?'6월 모의고사':'9월 모의고사'}</td>{['guk','su','yeong','tan1','tan2'].map(subj=><td key={subj}>{mn(exam,subj)&&<span style={{fontSize:9,color:'#64748b'}}>{mn(exam,subj)}<br/></span>}{ms(exam,subj,'grad')} / {ms(exam,subj,'pct')}</td>)}</tr>)}</tbody></table>
     <div className="sec-title">🏫 수시 지원 계획</div>
-    {susi.length===0?<p style={{fontSize:11,color:'#999',marginBottom:6}}>입력 없음</p>:(<table className="susi-tbl" style={{marginBottom:8}}><thead><tr><th>구분</th><th>대학</th><th>전형</th><th>전형명</th><th>학과</th><th>인원</th><th>내신%</th><th>서류%</th><th>면접%</th><th>수능최저</th><th>25년</th><th>24년</th><th>면접일</th><th>최종발표</th><th>가능성</th><th>비고</th></tr></thead>
-    <tbody>{susi.map((e,i)=>(<tr key={i} className={e.category==='전문대'?'cat-전문대':'cat-4year'}><td className="center">{e.category}</td><td style={{fontWeight:600}}>{e.univ}</td><td className="center">{e.jType}</td><td>{e.jName}</td><td>{e.major}</td><td className="center">{e.capacity}</td><td className="center">{e.ratio?.naesin}</td><td className="center">{e.ratio?.seoryu}</td><td className="center">{e.ratio?.myeon}</td><td className="center">{e.suneungMin}</td><td className="center">{e.results?.[0]?`${e.results[0].rate||'-'}/${e.results[0].avg||'-'}`:'-'}</td><td className="center">{e.results?.[1]?`${e.results[1].rate||'-'}/${e.results[1].avg||'-'}`:'-'}</td><td className="center">{e.schedule?.interview||'-'}</td><td className="center">{e.schedule?.final||'-'}</td><td className={`center ${dc(e.difficulty)}`}>{e.difficulty||'-'}</td><td>{e.note}</td></tr>))}</tbody></table>)}
+    {susi.length===0?<p style={{fontSize:11,color:'#999',marginBottom:6}}>입력 없음</p>:(<table className="susi-tbl" style={{marginBottom:8}}><thead><tr><th>구분</th><th>대학</th><th>전형</th><th>전형명</th><th>학과</th><th>인원</th><th>내신%</th><th>서류%</th><th>면접%</th><th>수능최저</th><th>26년</th><th>25년</th><th>24년</th><th>면접일</th><th>최종발표</th><th>가능성</th><th>비고</th></tr></thead>
+    <tbody>{susi.map((e,i)=>(<tr key={i} className={e.category==='전문대'?'cat-전문대':'cat-4year'}><td className="center">{e.category}</td><td style={{fontWeight:600}}>{e.univ}</td><td className="center">{e.jType}</td><td>{e.jName}</td><td>{e.major}</td><td className="center">{e.capacity}</td><td className="center">{e.ratio?.naesin}</td><td className="center">{e.ratio?.seoryu}</td><td className="center">{e.ratio?.myeon}</td><td className="center">{e.suneungMin}</td>{[0,1,2].map(ri=>{const r=e.results?.[ri];return <td key={ri} className="center">{r?`${r.rate||'-'}/${r.chungwon||'-'}/${r.avg||'-'}/${r.cut70||'-'}`:'-'}</td>;})}<td className="center">{e.schedule?.interview||'-'}</td><td className="center">{e.schedule?.final||'-'}</td><td className={`center ${dc(e.difficulty)}`}>{e.difficulty||'-'}</td><td>{e.note}</td></tr>))}</tbody></table>)}
     <div className="sec-title">📋 정시 지원 계획</div>
     <table className="jungsi-tbl" style={{marginBottom:8}}><thead><tr><th>군</th><th>순번</th><th>대학</th><th>모집단위(학과)</th><th>26입결</th><th>25입결</th><th>가능성</th><th>특이사항</th></tr></thead>
     <tbody>{['가','나','다'].map(gun=>jungsi.filter(e=>e.gun===gun).map((e,i)=>(<tr key={`${gun}${i}`}>{i===0&&<td className="gun-cell" rowSpan={jungsi.filter(r=>r.gun===gun).length}>{gun}군</td>}<td>{e.no}</td><td style={{fontWeight:e.univ?600:400,textAlign:'left'}}>{e.univ||'-'}</td><td style={{textAlign:'left'}}>{e.major||'-'}</td><td>{e.result2026||'-'}</td><td>{e.result2025||'-'}</td><td className={dc(e.difficulty)}>{e.difficulty||'-'}</td><td style={{textAlign:'left'}}>{e.note||'-'}</td></tr>)))}</tbody></table>
@@ -441,7 +442,7 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
 function ScheduleModal({cls,onClose}){
   const [slots,setSlots]=useState([]);
   const [requests,setRequests]=useState({});
-  const [date,setDate]=useState('');const [start,setStart]=useState('');const [end,setEnd]=useState('');const [note,setNote]=useState('');
+  const [date,setDate]=useState('');const [period,setPeriod]=useState('');const [location,setLocation]=useState('');
   const [adding,setAdding]=useState(false);const [tab,setTab]=useState('slots');
 
   useEffect(()=>{
@@ -453,10 +454,10 @@ function ScheduleModal({cls,onClose}){
   },[cls]);
 
   const addSlot=async()=>{
-    if(!date||!start||!end){alert('날짜와 시간을 모두 입력하세요');return;}
+    if(!date||!period){alert('날짜와 교시를 모두 선택하세요');return;}
     setAdding(true);
-    await clsRef(cls).collection('slots').add({date,startTime:start,endTime:end,note,confirmedFor:'',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
-    setStart('');setEnd('');setNote('');setAdding(false);};
+    await clsRef(cls).collection('slots').add({date,period:Number(period),startTime:String(period).padStart(2,'0'),endTime:'',location,note:location,confirmedFor:'',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    setPeriod('');setLocation('');setAdding(false);};
 
   const deleteSlot=async id=>{if(!window.confirm('삭제하시겠습니까?'))return;await clsRef(cls).collection('slots').doc(id).delete();};
 
@@ -474,6 +475,8 @@ function ScheduleModal({cls,onClose}){
   const pending=Object.entries(requests).filter(([k,v])=>v.status!=='confirmed'&&v.requestedSlots?.length>0);
 
   const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`;};
+  const slotLabel=s=>s.period?`${s.period}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
+  const place=s=>s.location||s.note||'';
 
   return(<div className="modal-bg" onClick={onClose}><div className="modal" style={{width:620,maxHeight:'85vh'}} onClick={e=>e.stopPropagation()}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
@@ -484,9 +487,8 @@ function ScheduleModal({cls,onClose}){
     {/* 슬롯 추가 */}
     <div style={{background:'var(--gray-50)',borderRadius:8,padding:12,marginBottom:14,display:'flex',gap:6,alignItems:'flex-end',flexWrap:'wrap'}}>
       <div><div className="field-label">날짜</div><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{width:140}}/></div>
-      <div><div className="field-label">시작</div><input type="time" value={start} onChange={e=>setStart(e.target.value)} style={{width:100}}/></div>
-      <div><div className="field-label">종료</div><input type="time" value={end} onChange={e=>setEnd(e.target.value)} style={{width:100}}/></div>
-      <div style={{flex:1,minWidth:100}}><div className="field-label">메모</div><input value={note} onChange={e=>setNote(e.target.value)} placeholder="예) 진로상담실" style={{width:'100%'}}/></div>
+      <div><div className="field-label">교시</div><select value={period} onChange={e=>setPeriod(e.target.value)} style={{width:120}}><option value="">선택</option>{Array.from({length:10},(_,i)=><option key={i+1} value={i+1}>{i+1}교시</option>)}</select></div>
+      <div style={{flex:1,minWidth:140}}><div className="field-label">장소</div><input value={location} onChange={e=>setLocation(e.target.value)} placeholder="예) 진로상담실" style={{width:'100%'}}/></div>
       <button onClick={addSlot} disabled={adding} className="btn-success" style={{padding:'6px 16px'}}>+ 추가</button>
     </div>
 
@@ -504,8 +506,8 @@ function ScheduleModal({cls,onClose}){
             {daySlots.map(s=>{
               const req=Object.entries(requests).filter(([k,v])=>v.requestedSlots?.includes(s.id));
               return(<div key={s.id} style={{display:'flex',gap:8,alignItems:'center',padding:'6px 10px',background:s.confirmedFor?'#f0fdf4':'white',border:`1px solid ${s.confirmedFor?'#a7f3d0':'var(--gray-200)'}`,borderRadius:7,marginBottom:4}}>
-                <span style={{fontWeight:600,fontSize:13,width:110,flexShrink:0}}>{s.startTime}~{s.endTime}</span>
-                {s.note&&<span style={{fontSize:11,color:'var(--gray-400)',width:80}}>{s.note}</span>}
+                <span style={{fontWeight:600,fontSize:13,width:70,flexShrink:0}}>{slotLabel(s)}</span>
+                {place(s)&&<span style={{fontSize:11,color:'var(--gray-400)',width:100}}>{place(s)}</span>}
                 {s.confirmedFor?(
                   <><span className="badge badge-green">{s.confirmedFor} 확정</span>
                   <button onClick={()=>unconfirm(s.id,s.confirmedFor)} style={{background:'none',color:'var(--gray-400)',fontSize:11,marginLeft:'auto'}}>취소</button></>
@@ -528,7 +530,8 @@ function ScheduleModal({cls,onClose}){
               {(req.requestedSlots||[]).map((sid,i)=>{const slot=slots.find(s=>s.id===sid);return slot?(
                 <div key={sid} style={{display:'flex',alignItems:'center',gap:8,background:'var(--gray-50)',borderRadius:5,padding:'5px 10px'}}>
                   <span style={{fontSize:11,color:'var(--gray-400)'}}>{i+1}순위</span>
-                  <span style={{fontSize:12,fontWeight:600}}>{slot.date} {slot.startTime}~{slot.endTime}</span>
+                  <span style={{fontSize:12,fontWeight:600}}>{slot.date} {slotLabel(slot)}</span>
+                  {place(slot)&&<span style={{fontSize:11,color:'var(--gray-400)'}}>{place(slot)}</span>}
                   {slot.confirmedFor?<span className="badge badge-gray">이미 확정됨</span>:
                     <button onClick={()=>confirmSlot(sid,sNum)} style={{marginLeft:'auto',background:'var(--success)',color:'white',padding:'3px 10px',fontSize:11,borderRadius:5,fontWeight:600}}>확정</button>}
                 </div>):null;})}
@@ -538,14 +541,14 @@ function ScheduleModal({cls,onClose}){
       {tab==='confirmed'&&(confirmed.length===0?<div className="empty-state" style={{padding:30}}>확정된 일정이 없습니다</div>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
           <thead><tr style={{background:'var(--gray-50)'}}>
-            {['날짜','시간','학생','메모'].map(h=><th key={h} style={{padding:'6px 10px',textAlign:'left',border:'1px solid var(--gray-200)',fontWeight:600}}>{h}</th>)}
+            {['날짜','교시','학생','장소'].map(h=><th key={h} style={{padding:'6px 10px',textAlign:'left',border:'1px solid var(--gray-200)',fontWeight:600}}>{h}</th>)}
           </tr></thead>
           <tbody>{confirmed.map(s=>{const req=requests[s.confirmedFor];return(
             <tr key={s.id}>
               <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)'}}>{dayLabel(s.date)}</td>
-              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',fontWeight:600}}>{s.startTime}~{s.endTime}</td>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',fontWeight:600}}>{slotLabel(s)}</td>
               <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)'}}>{req?.name||s.confirmedFor}</td>
-              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',color:'var(--gray-500)'}}>{s.note}</td>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',color:'var(--gray-500)'}}>{place(s)}</td>
             </tr>);})}</tbody>
         </table>)}
     </div>
@@ -570,6 +573,8 @@ function ScheduleSection({studentNumber,studentName,cls}){
   const confirmedSlot=myReq?.confirmedSlotId?slots.find(s=>s.id===myReq.confirmedSlotId):null;
   const available=slots.filter(s=>!s.confirmedFor||s.confirmedFor===studentNumber);
   const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`};
+  const slotLabel=s=>s.period?`${s.period}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
+  const place=s=>s.location||s.note||'';
 
   if(slots.length===0)return(<div className="section-box"><div className="section-title">📅 상담 일정 신청</div><p style={{fontSize:12,color:'var(--gray-400)'}}>선생님이 아직 상담 가능 시간을 등록하지 않았습니다.</p></div>);
 
@@ -579,11 +584,11 @@ function ScheduleSection({studentNumber,studentName,cls}){
       <div style={{background:'#f0fdf4',border:'2px solid #a7f3d0',borderRadius:8,padding:12,marginBottom:14,display:'flex',alignItems:'center',gap:10}}>
         <span style={{fontSize:24}}>✅</span>
         <div><div style={{fontWeight:700,color:'#15803d',fontSize:14}}>상담 일정 확정!</div>
-          <div style={{fontSize:13,fontWeight:600}}>{dayLabel(confirmedSlot.date)} {confirmedSlot.startTime}~{confirmedSlot.endTime}</div>
-          {confirmedSlot.note&&<div style={{fontSize:11,color:'var(--gray-500)'}}>{confirmedSlot.note}</div>}
+          <div style={{fontSize:13,fontWeight:600}}>{dayLabel(confirmedSlot.date)} {slotLabel(confirmedSlot)}</div>
+          {place(confirmedSlot)&&<div style={{fontSize:11,color:'var(--gray-500)'}}>{place(confirmedSlot)}</div>}
         </div>
       </div>)}
-    <p style={{fontSize:12,color:'var(--gray-600)',marginBottom:10}}>희망하는 상담 시간을 최대 3개 선택하세요 ({selected.length}/3)</p>
+    <p style={{fontSize:12,color:'var(--gray-600)',marginBottom:10}}>희망하는 상담 일정을 최대 3개 선택하세요 ({selected.length}/3)</p>
     <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:12}}>
       {available.map((s,i)=>{
         const isSel=selected.includes(s.id);const isConf=s.confirmedFor===studentNumber;const rank=selected.indexOf(s.id)+1;
@@ -594,9 +599,9 @@ function ScheduleSection({studentNumber,studentName,cls}){
             {isConf?<span style={{fontSize:12,color:'white'}}>✓</span>:isSel?<span style={{fontSize:11,color:'white',fontWeight:700}}>{rank}</span>:null}
           </div>
           <div style={{flex:1}}>
-            <span style={{fontWeight:600,fontSize:13}}>{s.startTime}~{s.endTime}</span>
+            <span style={{fontWeight:600,fontSize:13}}>{slotLabel(s)}</span>
             <span style={{fontSize:11,color:'var(--gray-400)',marginLeft:8}}>{dayLabel(s.date)}</span>
-            {s.note&&<span style={{fontSize:11,color:'var(--gray-400)',marginLeft:6}}>{s.note}</span>}
+            {place(s)&&<span style={{fontSize:11,color:'var(--gray-400)',marginLeft:6}}>{place(s)}</span>}
           </div>
           {isConf&&<span className="badge badge-green">확정</span>}
         </div>);})}
@@ -604,7 +609,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
     <div style={{marginBottom:10}}><div className="field-label">메모 (선생님께 전달할 말)</div>
       <input value={memo} onChange={e=>setMemo(e.target.value)} placeholder="예) 방과후 시간은 어렵습니다" style={{width:'100%'}}/></div>
     <button onClick={submit} disabled={saving||selected.length===0} style={{width:'100%',padding:'10px',background:selected.length>0?'var(--primary)':'var(--gray-200)',color:selected.length>0?'white':'var(--gray-400)',fontWeight:700,borderRadius:7,fontSize:13}}>
-      {saving?'신청 중...':`${selected.length}개 시간 신청하기`}
+      {saving?'신청 중...':`${selected.length}개 일정 신청하기`}
     </button>
   </div>);}
 function TeacherDashboard({user,onLogout}){
