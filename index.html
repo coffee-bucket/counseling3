@@ -433,6 +433,7 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
         <div style={{flex:1.5,minWidth:140}}><div className="field-label">특이사항</div><input value={data.specialNote||''} onChange={e=>update('specialNote',e.target.value)} style={{width:'100%'}}/></div></>}
         {!isTeacher&&<div style={{flex:1,minWidth:200}}><div className="field-label">메모 (궁금한 점 등)</div><input value={data.studentNote||''} onChange={e=>update('studentNote',e.target.value)} style={{width:'100%'}}/></div>}
       </div>
+      {!isTeacher&&cls&&<ScheduleSection studentNumber={data.studentNumber} studentName={data.name} cls={cls}/>}
       <GradeSection grades={data.grades} onChange={g=>setData(d=>({...d,grades:g}))}/>
       <div className="section-box">
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
@@ -443,7 +444,6 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
         {(data.susiList||[]).map((e,idx)=><SusiEntryRow key={e.id||idx} entry={e} onChange={en=>updateSusi(idx,en)} onDelete={()=>deleteSusi(idx)}/>)}
       </div>
       <JungsiSection jungsiList={data.jungsiList||[]} onChange={v=>setData(d=>({...d,jungsiList:v}))}/>
-      {!isTeacher&&cls&&<ScheduleSection studentNumber={data.studentNumber} studentName={data.name} cls={cls}/>}
     </div>
     {isTeacher&&<PrintView data={data} cls={cls}/>}
   </div>);}
@@ -455,6 +455,8 @@ function ScheduleModal({cls,onClose}){
   const [requests,setRequests]=useState({});
   const [date,setDate]=useState('');const [period,setPeriod]=useState('');const [location,setLocation]=useState(DEFAULT_LOCATION);
   const [adding,setAdding]=useState(false);const [tab,setTab]=useState('slots');
+  const [modalPos,setModalPos]=useState(null);
+  const dragRef=useRef(null);
   const sortSlots=list=>list.sort((a,b)=>`${a.date||''} ${a.startTime||''}`.localeCompare(`${b.date||''} ${b.startTime||''}`));
   const refreshSlots=async()=>{
     const snap=await clsRef(cls).collection('slots').get();
@@ -468,6 +470,27 @@ function ScheduleModal({cls,onClose}){
       .onSnapshot(snap=>{const m={};snap.docs.forEach(d=>m[d.id]=d.data());setRequests(m);},err=>{console.error(err);alert('상담 신청 불러오기 실패: '+(err.message||err));});
     return()=>{unsub();unsub2();};
   },[cls]);
+
+  useEffect(()=>{
+    const move=e=>{
+      if(!dragRef.current)return;
+      const {dx,dy,w,h}=dragRef.current;
+      const x=Math.max(12,Math.min(window.innerWidth-w-12,e.clientX-dx));
+      const y=Math.max(12,Math.min(window.innerHeight-h-12,e.clientY-dy));
+      setModalPos({x,y});
+    };
+    const up=()=>{dragRef.current=null;};
+    window.addEventListener('mousemove',move);
+    window.addEventListener('mouseup',up);
+    return()=>{window.removeEventListener('mousemove',move);window.removeEventListener('mouseup',up);};
+  },[]);
+
+  const startDrag=e=>{
+    if(e.button!==0)return;
+    const rect=e.currentTarget.closest('.modal').getBoundingClientRect();
+    dragRef.current={dx:e.clientX-rect.left,dy:e.clientY-rect.top,w:rect.width,h:rect.height};
+    setModalPos({x:rect.left,y:rect.top});
+  };
 
   const addSlot=async()=>{
     if(!date||!period){alert('날짜와 교시를 모두 선택하세요');return;}
@@ -555,6 +578,7 @@ function ScheduleModal({cls,onClose}){
   const byDate={};slots.forEach(s=>{if(!byDate[s.date])byDate[s.date]=[];byDate[s.date].push(s);});
   const confirmed=slots.filter(s=>s.confirmedFor&&requests[s.confirmedFor]?.status==='confirmed');
   const pending=Object.entries(requests).filter(([k,v])=>v.status!=='confirmed'&&v.requestedSlots?.length>0);
+  const roundRows=Object.entries(requests).sort(([a],[b])=>a.localeCompare(b));
 
   const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`;};
   const periodTimes={0:'08:00~08:50',8:'17:00~17:50',9:'18:00~18:50',10:'19:00~19:50',11:'20:00~20:50',12:'21:00~21:50'};
@@ -562,25 +586,30 @@ function ScheduleModal({cls,onClose}){
   const periodLabel=n=>periodTimes[n]?`${n}교시 (${periodTimes[n]})`:`${n}교시`;
   const slotLabel=s=>{const n=periodNum(s);return n!==null?periodLabel(n):`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;};
   const place=s=>s.location||s.note||'';
-  const studentLabel=(sNum,roundOverride)=>{const req=requests[sNum]||{};const round=roundOverride||req.round||1;return `${sNum}${req.name?` ${req.name}`:''} (${round}회차)`;};
+  const studentLabel=(sNum,roundOverride)=>{const req=requests[sNum]||{};const round=roundOverride||req.round||1;return `${sNum}${req.name?` ${req.name}`:''} ${round}회차`;}
+  const studentStatusLabel=(sNum,status,roundOverride)=>`${studentLabel(sNum,roundOverride)} ${status}`;
+  const modalStyle={width:620,maxHeight:'85vh',position:'fixed',left:modalPos?modalPos.x:'50%',top:modalPos?modalPos.y:'50%',transform:modalPos?'none':'translate(-50%,-50%)'};
 
-  return(<div className="modal-bg" onClick={onClose}><div className="modal" style={{width:620,maxHeight:'85vh'}} onClick={e=>e.stopPropagation()}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+  return(<div className="modal-bg" onClick={onClose}><div className="modal" style={modalStyle} onClick={e=>e.stopPropagation()}>
+    <div onMouseDown={startDrag} style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,cursor:'move',userSelect:'none'}}>
       <h3 style={{fontSize:16,fontWeight:700}}>📅 상담 일정 관리 — 3학년 {cls}반</h3>
-      <button onClick={onClose} style={{background:'none',fontSize:20,color:'var(--gray-400)'}}>✕</button>
+      <button onMouseDown={e=>e.stopPropagation()} onClick={onClose} style={{background:'none',fontSize:20,color:'var(--gray-400)',cursor:'pointer'}}>✕</button>
     </div>
 
     {/* 슬롯 추가 */}
-    <div style={{background:'var(--gray-50)',borderRadius:8,padding:12,marginBottom:14,display:'flex',gap:6,alignItems:'flex-end',flexWrap:'wrap'}}>
-      <div><div className="field-label">날짜</div><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{width:140}}/></div>
-      <div><div className="field-label">교시</div><select value={period} onChange={e=>setPeriod(e.target.value)} style={{width:190}}><option value="">선택</option>{Array.from({length:13},(_,i)=><option key={i} value={i}>{periodLabel(i)}</option>)}</select></div>
-      <div style={{flex:1,minWidth:140}}><div className="field-label">장소</div><input value={location} onChange={e=>setLocation(e.target.value)} placeholder="예) 진로상담실" style={{width:'100%'}}/></div>
-      <button onClick={addSlot} disabled={adding} className="btn-success" style={{padding:'6px 16px'}}>+ 추가</button>
+    <div style={{background:'var(--gray-50)',borderRadius:8,padding:12,marginBottom:14,display:'flex',gap:8,alignItems:'flex-end',flexWrap:'nowrap'}}>
+      <div style={{flex:'0 0 150px'}}><div className="field-label">날짜</div><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{width:'100%'}}/></div>
+      <div style={{flex:'0 0 150px'}}><div className="field-label">교시</div><select value={period} onChange={e=>setPeriod(e.target.value)} style={{width:'100%'}}><option value="">선택</option>{Array.from({length:13},(_,i)=><option key={i} value={i}>{periodLabel(i)}</option>)}</select></div>
+      <div style={{flex:'1 1 180px',minWidth:0}}><div className="field-label">장소</div><input value={location} onChange={e=>setLocation(e.target.value)} placeholder="예) 진로상담실" style={{width:'100%'}}/></div>
+      <button onClick={addSlot} disabled={adding} className="btn-success" style={{padding:'6px 16px',flex:'0 0 auto',whiteSpace:'nowrap'}}>+ 추가</button>
+    </div>
+    <div style={{fontSize:12,color:'var(--gray-500)',background:'#f8fafc',border:'1px solid var(--gray-200)',borderRadius:8,padding:'8px 10px',marginBottom:12}}>
+      '이번 회차 상담 완료' 처리를 하면 학생이 추가 상담 신청이 가능합니다.
     </div>
 
     {/* 탭 */}
     <div style={{display:'flex',gap:6,marginBottom:12}}>
-      {[['slots',`전체 일정 (${slots.length})`],['pending',`신청 대기 (${pending.length})`],['confirmed',`확정 (${confirmed.length})`]].map(([k,l])=>(
+      {[['slots',`전체 일정 (${slots.length})`],['pending',`신청 대기 (${pending.length})`],['confirmed',`확정 (${confirmed.length})`],['rounds',`상담 회차 (${roundRows.length})`]].map(([k,l])=>(
         <button key={k} className={`tab ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{l}</button>))}
     </div>
 
@@ -597,13 +626,13 @@ function ScheduleModal({cls,onClose}){
                 <span style={{fontWeight:600,fontSize:13,width:150,flexShrink:0}}>{slotLabel(s)}</span>
                 {place(s)&&<span style={{fontSize:11,color:'var(--gray-400)',width:100}}>{place(s)}</span>}
                 {s.confirmedFor?(
-                  <><span className={`badge ${reqStatus==='confirmed'?'badge-green':'badge-blue'}`}>{studentLabel(s.confirmedFor)} {reqStatus==='confirmed'?'확정':'신청 마감'}</span>
+                  <><span className={`badge ${reqStatus==='confirmed'?'badge-green':'badge-blue'}`}>{studentStatusLabel(s.confirmedFor,reqStatus==='confirmed'?'상담 확정':'상담 신청')}</span>
                   {requests[s.confirmedFor]?.studentNote&&<span style={{fontSize:11,color:'var(--gray-500)',flex:1,minWidth:120}}>메모: {requests[s.confirmedFor].studentNote}</span>}
                   {reqStatus!=='confirmed'&&<button onClick={()=>confirmSlot(s.id,s.confirmedFor)} style={{marginLeft:'auto',background:'var(--success)',color:'white',padding:'3px 10px',fontSize:11,borderRadius:5,fontWeight:600}}>확정</button>}
-                  {reqStatus==='confirmed'&&<button onClick={()=>completeSlot(s.id,s.confirmedFor)} style={{marginLeft:'auto',background:'var(--primary)',color:'white',padding:'3px 10px',fontSize:11,borderRadius:5,fontWeight:600}}>상담 완료</button>}
+                  {reqStatus==='confirmed'&&<button onClick={()=>completeSlot(s.id,s.confirmedFor)} style={{marginLeft:'auto',background:'var(--primary)',color:'white',padding:'3px 10px',fontSize:11,borderRadius:5,fontWeight:600}}>이번 회차 상담 완료</button>}
                   <button onClick={()=>unconfirm(s.id,s.confirmedFor)} style={{background:'none',color:'var(--gray-400)',fontSize:11,marginLeft:reqStatus==='confirmed'?'4px':'4px'}}>취소</button></>
                 ):s.completedFor?(
-                  <><span className="badge badge-gray">{studentLabel(s.completedFor,s.completedRound)} 상담 완료</span>
+                  <><span className="badge badge-gray">{studentStatusLabel(s.completedFor,'상담 완료',s.completedRound)}</span>
                   {doneReq?.studentNote&&<span style={{fontSize:11,color:'var(--gray-500)',flex:1,minWidth:120}}>메모: {doneReq.studentNote}</span>}</>
                 ):(
                   <><span style={{fontSize:11,color:'var(--gray-500)'}}>신청 {req.length}명 {req.length>0&&`(${req.slice(0,3).map(([k,v])=>v.name||k).join(', ')}${req.length>3?'...':''})`}</span>
@@ -646,6 +675,23 @@ function ScheduleModal({cls,onClose}){
               <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',color:'var(--gray-500)'}}>{req?.studentNote||'-'}</td>
             </tr>);})}</tbody>
         </table>)}
+
+      {tab==='rounds'&&(roundRows.length===0?<div className="empty-state" style={{padding:30}}>상담 신청 이력이 없습니다</div>:
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+          <thead><tr style={{background:'var(--gray-50)'}}>
+            {['학번','이름','현재 회차','상태','완료 회차'].map(h=><th key={h} style={{padding:'6px 10px',textAlign:'left',border:'1px solid var(--gray-200)',fontWeight:600}}>{h}</th>)}
+          </tr></thead>
+          <tbody>{roundRows.map(([sNum,req])=>(
+            <tr key={sNum}>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',fontWeight:700}}>{sNum}</td>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)'}}>{req.name||'-'}</td>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',fontWeight:700,color:'var(--primary)'}}>{req.round||1}회차</td>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)'}}>
+                <span className={`badge ${req.status==='confirmed'?'badge-green':req.status==='pending'?'badge-blue':req.status==='completed'?'badge-gray':'badge-gray'}`}>{req.status==='confirmed'?'확정':req.status==='pending'?'신청':req.status==='completed'?'완료 후 재신청 가능':'-'}</span>
+              </td>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',color:'var(--gray-500)'}}>{req.lastCompletedRound?`${req.lastCompletedRound}회차 완료`:'-'}</td>
+            </tr>))}</tbody>
+        </table>)}
     </div>
   </div></div>);}
 
@@ -653,6 +699,7 @@ function ScheduleModal({cls,onClose}){
 function ScheduleSection({studentNumber,studentName,cls}){
   const [slots,setSlots]=useState([]);const [myReq,setMyReq]=useState(null);
   const [selected,setSelected]=useState([]);const [memo,setMemo]=useState('');const [saving,setSaving]=useState(false);
+  const [collapsed,setCollapsed]=useState(false);
 
   useEffect(()=>{
     const sortSlots=list=>list.sort((a,b)=>`${a.date||''} ${a.startTime||''}`.localeCompare(`${b.date||''} ${b.startTime||''}`));
@@ -710,10 +757,18 @@ function ScheduleSection({studentNumber,studentName,cls}){
   const slotLabel=s=>{const n=periodNum(s);return n!==null?periodLabel(n):`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;};
   const place=s=>s.location||s.note||'';
 
-  if(slots.length===0)return(<div className="section-box"><div className="section-title">📅 상담 일정 신청</div><p style={{fontSize:12,color:'var(--gray-400)'}}>선생님이 아직 상담 가능 시간을 등록하지 않았습니다.</p></div>);
+  const header=(<div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:collapsed?0:12}}>
+    <div className="section-title" style={{marginBottom:0}}>📅 상담 일정 신청</div>
+    <button type="button" onClick={()=>setCollapsed(v=>!v)} className="btn-ghost" style={{padding:'5px 10px',fontSize:12,fontWeight:700}}>
+      {collapsed?'펼치기':'접기'}
+    </button>
+  </div>);
+
+  if(slots.length===0)return(<div className="section-box">{header}{!collapsed&&<p style={{fontSize:12,color:'var(--gray-400)'}}>선생님이 아직 상담 가능 시간을 등록하지 않았습니다.</p>}</div>);
 
   return(<div className="section-box">
-    <div className="section-title">📅 상담 일정 신청</div>
+    {header}
+    {!collapsed&&<>
     {confirmedSlot&&(
       <div style={{background:'#f0fdf4',border:'2px solid #a7f3d0',borderRadius:8,padding:12,marginBottom:14,display:'flex',alignItems:'center',gap:10}}>
         <span style={{fontSize:24}}>✅</span>
@@ -734,8 +789,8 @@ function ScheduleSection({studentNumber,studentName,cls}){
           </div>
           <div style={{flex:1}}>
             <span style={{fontWeight:600,fontSize:13}}>{slotLabel(s)}</span>
-            <span style={{fontSize:11,color:'var(--gray-400)',marginLeft:8}}>{dayLabel(s.date)}</span>
-            {place(s)&&<span style={{fontSize:11,color:'var(--gray-400)',marginLeft:6}}>{place(s)}</span>}
+            <span style={{fontSize:14,color:'var(--gray-600)',fontWeight:700,marginLeft:10}}>{dayLabel(s.date)}</span>
+            {place(s)&&<span style={{fontSize:12,color:'var(--gray-500)',fontWeight:600,marginLeft:8}}>{place(s)}</span>}
           </div>
           {isMine&&<span className={`badge ${isConf?'badge-green':'badge-blue'}`}>{isConf?'확정':'신청 완료'}</span>}
           {isDoneMine&&<span className="badge badge-gray">{s.completedRound?`${s.completedRound}회차 완료`:'상담 완료'}</span>}
@@ -748,6 +803,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
     <button onClick={submit} disabled={saving||selected.length===0} style={{width:'100%',padding:'10px',background:selected.length>0?'var(--primary)':'var(--gray-200)',color:selected.length>0?'white':'var(--gray-400)',fontWeight:700,borderRadius:7,fontSize:13}}>
       {saving?'신청 중...':'선택한 일정 신청하기'}
     </button>
+    </>}
   </div>);}
 function TeacherDashboard({user,onLogout}){
   const [currentCls,setCurrentCls]=useState(null);
