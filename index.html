@@ -1183,13 +1183,15 @@ function App(){
     setTeacherProfile(null);setRole('student');setUser(u);setScreen('app');
   };
   useEffect(()=>{
-    const saved=localStorage.getItem('fbConfig');
-    if(saved){try{const cfg=JSON.parse(saved);initFirebase(cfg);setProjectId(cfg.projectId);
+    const cfg={"apiKey":"AIzaSyBYHjmTrzCMeyoisRwCh21ExtcyDt0JoVw","authDomain":"cons-cfa95.firebaseapp.com","projectId":"cons-cfa95","storageBucket":"cons-cfa95.firebasestorage.app","messagingSenderId":"814071622450","appId":"1:814071622450:web:583f037cc07f4999ee852b"};
+    try{
+      initFirebase(cfg);setProjectId(cfg.projectId);
+      localStorage.setItem('fbConfig',JSON.stringify(cfg));
       const unsub=auth.onAuthStateChanged(u=>{
         resolveUser(u).catch(e=>{console.error(e);setUser(null);setRole(null);setTeacherProfile(null);setScreen('login');});
       });
-      return()=>unsub();}catch(e){localStorage.removeItem('fbConfig');setScreen('config');}}
-    else setScreen('config');
+      return()=>unsub();
+    }catch(e){console.error('Firebase 초기화 오류:',e);setScreen('config');}
   },[]);
   const handleConfig=cfg=>{initFirebase(cfg);setProjectId(cfg.projectId);auth.onAuthStateChanged(u=>{resolveUser(u).catch(e=>{console.error(e);setScreen('login');});});};
   const handleLogout=()=>{auth.signOut();setScreen('login');setUser(null);setRole(null);setTeacherProfile(null);};
