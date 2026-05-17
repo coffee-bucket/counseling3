@@ -167,7 +167,16 @@ function LoginScreen({projectId}){
   const [sNum,setSNum]=useState('');const [pw,setPw]=useState('');
   const [loading,setLoading]=useState(false);const [err,setErr]=useState('');
 
-  const teacherLogin=async()=>{setLoading(true);setErr('');try{await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());}catch(e){setErr('로그인 실패: '+e.message);setLoading(false);}};
+  const teacherLogin=async()=>{setLoading(true);setErr('');
+    try{
+      const result=await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      const email=result.user.email||'';
+      if(!email.endsWith('@ggh.goe.go.kr')){
+        await auth.signOut();
+        setErr('학교 계정(@ggh.goe.go.kr)으로만 로그인할 수 있습니다.');
+        setLoading(false);return;
+      }
+    }catch(e){setErr('로그인 실패: '+e.message);setLoading(false);}};
   const studentLogin=async()=>{if(!sNum.trim()||!pw.trim()){setErr('학번과 비밀번호를 입력하세요');return;}setLoading(true);setErr('');try{await auth.signInWithEmailAndPassword(sEmail(sNum.trim(),projectId),pw);}catch(e){setErr('학번 또는 비밀번호가 올바르지 않습니다');setLoading(false);}};
 
   if(mode==='select')return(<div className="center-screen"><div className="card" style={{width:400,textAlign:'center'}}>
@@ -255,32 +264,39 @@ function BulkAccountModal({students,teacherUid,projectId,cls,onClose}){
     setPhase('running');
     const newResults=[];const newErrors=[];
     const toCreate=students.filter(s=>!s.authUid&&s.studentNumber);
+    const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
     for(let i=0;i<toCreate.length;i++){
       const s=toCreate[i];
       const pw=genPw();
       const email=sEmail(s.studentNumber,projectId);
-      try{
-        // Use secondary app to avoid signing out teacher
-        const secApp=firebase.initializeApp(FB_CONFIG,'sec_'+Date.now());
-        const secAuth=secApp.auth();
-        const cred=await secAuth.createUserWithEmailAndPassword(email,pw);
-        const authUid=cred.user.uid;
-        await secAuth.signOut();
-        try{await secApp.delete();}catch(e){}
-        // Save to Firestore
-        await db.collection('studentAccounts').doc(s.studentNumber).set({uid:authUid,studentNumber:s.studentNumber,name:s.name,teacherUid,password:pw,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
-        await db.collection('teachers').doc(teacherUid).collection('students').doc(s.studentNumber).update({authUid});
-        newResults.push({...s,pw,authUid});
-      }catch(e){
-        if(e.code==='auth/email-already-in-use'){
-          // Already exists - just record with placeholder
-          newResults.push({...s,pw:'(기존계정)',authUid:'exists'});
-        }else{
-          newErrors.push({name:s.name,studentNumber:s.studentNumber,err:e.message});
+      let retries=3;
+      while(retries>0){
+        try{
+          const secApp=firebase.initializeApp(FB_CONFIG,'sec_'+Date.now());
+          const secAuth=secApp.auth();
+          const cred=await secAuth.createUserWithEmailAndPassword(email,pw);
+          const authUid=cred.user.uid;
+          await secAuth.signOut();try{await secApp.delete();}catch(e){}
+          await db.collection('studentAccounts').doc(s.studentNumber).set({uid:authUid,studentNumber:s.studentNumber,name:s.name,teacherUid,password:pw,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+          await db.collection('teachers').doc(teacherUid).collection('students').doc(s.studentNumber).update({authUid});
+          newResults.push({...s,pw,authUid});
+          retries=0;
+        }catch(e){
+          if(e.code==='auth/email-already-in-use'){
+            newResults.push({...s,pw:'(기존계정)',authUid:'exists'});retries=0;
+          }else if(e.code==='auth/too-many-requests'){
+            retries--;
+            if(retries>0){await sleep(5000);}
+            else{newErrors.push({name:s.name,studentNumber:s.studentNumber,err:'rate limit - 잠시 후 재시도 필요'});}
+          }else{
+            newErrors.push({name:s.name,studentNumber:s.studentNumber,err:e.message});retries=0;
+          }
         }
       }
       setProgress(Math.round((i+1)/toCreate.length*100));
+      // Firebase rate limit 방지: 계정마다 1.2초 대기
+      if(i<toCreate.length-1) await sleep(1200);
     }
     setResults(newResults);setErrors(newErrors);setPhase('done');};
 
@@ -309,7 +325,8 @@ function BulkAccountModal({students,teacherUid,projectId,cls,onClose}){
           <div style={{fontSize:32,marginBottom:8}}>⏳</div>
           <p style={{fontSize:14,fontWeight:600,marginBottom:12}}>계정 생성 중... {progress}%</p>
           <div className="progress-bar"><div className="progress-fill" style={{width:`${progress}%`}}/></div>
-          <p style={{fontSize:12,color:'var(--gray-400)',marginTop:8}}>잠시 기다려주세요. 창을 닫지 마세요.</p>
+          <p style={{fontSize:12,color:'var(--gray-400)',marginTop:8}}>계정 간 1.2초 간격으로 생성됩니다. 창을 닫지 마세요.</p>
+          <p style={{fontSize:11,color:'var(--gray-300)',marginTop:4}}>예상 소요시간: 약 {Math.ceil(students.filter(s=>!s.authUid).length*1.2/60)}분</p>
         </div>
       </>)}
 
@@ -318,9 +335,10 @@ function BulkAccountModal({students,teacherUid,projectId,cls,onClose}){
           <p style={{fontWeight:700,color:'#15803d',marginBottom:4}}>✅ 완료! {results.length}명 처리됨</p>
           {errors.length>0&&<p style={{fontSize:12,color:'var(--danger)'}}>⚠ 오류 {errors.length}건 (아래 목록 확인)</p>}
         </div>
-        {errors.length>0&&(<div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:12,marginBottom:12,fontSize:11,maxHeight:100,overflowY:'auto'}}>
+        {errors.length>0&&(<><div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:12,marginBottom:12,fontSize:11,maxHeight:100,overflowY:'auto'}}>
           {errors.map((e,i)=><div key={i}>{e.name}({e.studentNumber}): {e.err}</div>)}
-        </div>)}
+        </div>
+        <div style={{fontSize:12,color:'var(--danger)',marginBottom:10}}>⚠ rate limit 오류는 5~10분 후 다시 실행하면 됩니다. 나머지 학생만 재시도합니다.</div></>)}
         <div style={{display:'flex',gap:8}}>
           <button onClick={printCards} style={{flex:1,padding:'12px',background:'#0f766e',color:'white',fontWeight:700,fontSize:14,borderRadius:8}}>🖨️ 계정 카드 인쇄</button>
           <button onClick={onClose} className="btn-ghost" style={{padding:'12px 16px'}}>닫기</button>
