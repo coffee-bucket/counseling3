@@ -241,7 +241,10 @@ function BulkAccountModal({students,cls,projectId,onClose}){
           await clsRef(cls).collection('students').doc(s.studentNumber).update({authUid});
           newResults.push({...s,pw,authUid});retries=0;
         }catch(e){
-          if(e.code==='auth/email-already-in-use'){newResults.push({...s,pw:'(기존계정)',authUid:'exists'});retries=0;}
+          if(e.code==='auth/email-already-in-use'){
+            await clsRef(cls).collection('students').doc(s.studentNumber).update({authUid:'exists'});
+            newResults.push({...s,pw:'(기존계정)',authUid:'exists'});retries=0;
+          }
           else if(e.code==='auth/too-many-requests'){
             retries--;
             const waitSec=retries===2?10:retries===1?30:0;
@@ -440,9 +443,10 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
 
 /* ── Schedule Modal (Teacher) ── */
 function ScheduleModal({cls,onClose}){
+  const DEFAULT_LOCATION='3학년부 교무실';
   const [slots,setSlots]=useState([]);
   const [requests,setRequests]=useState({});
-  const [date,setDate]=useState('');const [period,setPeriod]=useState('');const [location,setLocation]=useState('');
+  const [date,setDate]=useState('');const [period,setPeriod]=useState('');const [location,setLocation]=useState(DEFAULT_LOCATION);
   const [adding,setAdding]=useState(false);const [tab,setTab]=useState('slots');
 
   useEffect(()=>{
@@ -456,8 +460,14 @@ function ScheduleModal({cls,onClose}){
   const addSlot=async()=>{
     if(!date||!period){alert('날짜와 교시를 모두 선택하세요');return;}
     setAdding(true);
-    await clsRef(cls).collection('slots').add({date,period:Number(period),startTime:String(period).padStart(2,'0'),endTime:'',location,note:location,confirmedFor:'',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
-    setPeriod('');setLocation('');setAdding(false);};
+    try{
+      const placeText=(location||DEFAULT_LOCATION).trim();
+      await clsRef(cls).collection('slots').add({date,startTime:`${String(period).padStart(2,'0')}교시`,endTime:'',note:placeText,confirmedFor:'',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      setPeriod('');setLocation(DEFAULT_LOCATION);
+    }catch(e){
+      console.error(e);alert('상담 일정 추가 실패: '+(e.message||e));
+    }finally{setAdding(false);}
+  };
 
   const deleteSlot=async id=>{if(!window.confirm('삭제하시겠습니까?'))return;await clsRef(cls).collection('slots').doc(id).delete();};
 
@@ -475,7 +485,7 @@ function ScheduleModal({cls,onClose}){
   const pending=Object.entries(requests).filter(([k,v])=>v.status!=='confirmed'&&v.requestedSlots?.length>0);
 
   const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`;};
-  const slotLabel=s=>s.period?`${s.period}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
+  const slotLabel=s=>s.period?`${s.period}교시`:s.startTime?.match(/^\d{2}교시$/)?`${Number(s.startTime.slice(0,2))}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
   const place=s=>s.location||s.note||'';
 
   return(<div className="modal-bg" onClick={onClose}><div className="modal" style={{width:620,maxHeight:'85vh'}} onClick={e=>e.stopPropagation()}>
@@ -573,7 +583,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
   const confirmedSlot=myReq?.confirmedSlotId?slots.find(s=>s.id===myReq.confirmedSlotId):null;
   const available=slots.filter(s=>!s.confirmedFor||s.confirmedFor===studentNumber);
   const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`};
-  const slotLabel=s=>s.period?`${s.period}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
+  const slotLabel=s=>s.period?`${s.period}교시`:s.startTime?.match(/^\d{2}교시$/)?`${Number(s.startTime.slice(0,2))}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
   const place=s=>s.location||s.note||'';
 
   if(slots.length===0)return(<div className="section-box"><div className="section-title">📅 상담 일정 신청</div><p style={{fontSize:12,color:'var(--gray-400)'}}>선생님이 아직 상담 가능 시간을 등록하지 않았습니다.</p></div>);
@@ -654,7 +664,19 @@ function TeacherDashboard({user,onLogout}){
           if(seed){const batch=db.batch();seed.students.forEach(s=>{batch.set(clsRef(currentCls).collection('students').doc(s.studentNumber),{...defStudent(s),createdAt:firebase.firestore.FieldValue.serverTimestamp()});});await batch.commit();}
         }
       }else{
-        setStudents(snap.docs.map(d=>({id:d.id,...d.data()})));setLoading(false);
+        const docs=snap.docs.map(d=>({id:d.id,...d.data()}));
+        const seed=STUDENT_DATA.find(c=>c.cls===currentCls);
+        if(seed){
+          const existing=new Set(docs.map(s=>s.studentNumber));
+          const missing=seed.students.filter(s=>!existing.has(s.studentNumber));
+          if(missing.length>0){
+            const batch=db.batch();
+            missing.forEach(s=>batch.set(clsRef(currentCls).collection('students').doc(s.studentNumber),{...defStudent(s),createdAt:firebase.firestore.FieldValue.serverTimestamp()}));
+            await batch.commit();
+            return;
+          }
+        }
+        setStudents(docs);setLoading(false);
       }
     },err=>{console.error(err);setLoading(false);});
     return()=>unsub();
