@@ -241,12 +241,16 @@ function BulkAccountModal({students,cls,projectId,onClose}){
           newResults.push({...s,pw,authUid});retries=0;
         }catch(e){
           if(e.code==='auth/email-already-in-use'){newResults.push({...s,pw:'(기존계정)',authUid:'exists'});retries=0;}
-          else if(e.code==='auth/too-many-requests'){retries--;if(retries>0)await sleep(5000);else newErrors.push({name:s.name,studentNumber:s.studentNumber,err:'rate limit'});}
-          else{newErrors.push({name:s.name,studentNumber:s.studentNumber,err:e.message});retries=0;}
+          else if(e.code==='auth/too-many-requests'){
+            retries--;
+            const waitSec=retries===2?10:retries===1?30:0;
+            if(retries>0){await sleep(waitSec*1000);}
+            else newErrors.push({name:s.name,studentNumber:s.studentNumber,err:`rate limit - ${waitSec}초 대기 후 재시도했으나 실패`});
+          }else{newErrors.push({name:s.name,studentNumber:s.studentNumber,err:e.message});retries=0;}
         }
       }
       setProgress(Math.round((i+1)/toCreate.length*100));
-      if(i<toCreate.length-1)await sleep(1200);
+      if(i<toCreate.length-1)await sleep(2500);
     }
     setResults(newResults);setErrors(newErrors);setPhase('done');};
 
@@ -409,11 +413,180 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
         {(data.susiList||[]).map((e,idx)=><SusiEntryRow key={e.id||idx} entry={e} onChange={en=>updateSusi(idx,en)} onDelete={()=>deleteSusi(idx)}/>)}
       </div>
       <JungsiSection jungsiList={data.jungsiList||[]} onChange={v=>setData(d=>({...d,jungsiList:v}))}/>
+      {!isTeacher&&cls&&<ScheduleSection studentNumber={data.studentNumber} studentName={data.name} cls={cls}/>}
     </div>
     {isTeacher&&<PrintView data={data} cls={cls}/>}
   </div>);}
 
-/* ── Teacher Dashboard ── */
+/* ── Schedule Modal (Teacher) ── */
+function ScheduleModal({cls,onClose}){
+  const [slots,setSlots]=useState([]);
+  const [requests,setRequests]=useState({});
+  const [date,setDate]=useState('');const [start,setStart]=useState('');const [end,setEnd]=useState('');const [note,setNote]=useState('');
+  const [adding,setAdding]=useState(false);const [tab,setTab]=useState('slots');
+
+  useEffect(()=>{
+    const unsub=clsRef(cls).collection('slots').orderBy('date').orderBy('startTime')
+      .onSnapshot(snap=>setSlots(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    const unsub2=clsRef(cls).collection('requests')
+      .onSnapshot(snap=>{const m={};snap.docs.forEach(d=>m[d.id]=d.data());setRequests(m);});
+    return()=>{unsub();unsub2();};
+  },[cls]);
+
+  const addSlot=async()=>{
+    if(!date||!start||!end){alert('날짜와 시간을 모두 입력하세요');return;}
+    setAdding(true);
+    await clsRef(cls).collection('slots').add({date,startTime:start,endTime:end,note,confirmedFor:'',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+    setStart('');setEnd('');setNote('');setAdding(false);};
+
+  const deleteSlot=async id=>{if(!window.confirm('삭제하시겠습니까?'))return;await clsRef(cls).collection('slots').doc(id).delete();};
+
+  const confirmSlot=async(slotId,studentNum)=>{
+    await clsRef(cls).collection('slots').doc(slotId).update({confirmedFor:studentNum});
+    await clsRef(cls).collection('requests').doc(studentNum).update({confirmedSlotId:slotId,status:'confirmed'});};
+
+  const unconfirm=async(slotId,studentNum)=>{
+    await clsRef(cls).collection('slots').doc(slotId).update({confirmedFor:''});
+    await clsRef(cls).collection('requests').doc(studentNum).update({confirmedSlotId:'',status:'pending'});};
+
+  // Group slots by date
+  const byDate={};slots.forEach(s=>{if(!byDate[s.date])byDate[s.date]=[];byDate[s.date].push(s);});
+  const confirmed=slots.filter(s=>s.confirmedFor);
+  const pending=Object.entries(requests).filter(([k,v])=>v.status!=='confirmed'&&v.requestedSlots?.length>0);
+
+  const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`;};
+
+  return(<div className="modal-bg" onClick={onClose}><div className="modal" style={{width:620,maxHeight:'85vh'}} onClick={e=>e.stopPropagation()}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+      <h3 style={{fontSize:16,fontWeight:700}}>📅 상담 일정 관리 — 3학년 {cls}반</h3>
+      <button onClick={onClose} style={{background:'none',fontSize:20,color:'var(--gray-400)'}}>✕</button>
+    </div>
+
+    {/* 슬롯 추가 */}
+    <div style={{background:'var(--gray-50)',borderRadius:8,padding:12,marginBottom:14,display:'flex',gap:6,alignItems:'flex-end',flexWrap:'wrap'}}>
+      <div><div className="field-label">날짜</div><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{width:140}}/></div>
+      <div><div className="field-label">시작</div><input type="time" value={start} onChange={e=>setStart(e.target.value)} style={{width:100}}/></div>
+      <div><div className="field-label">종료</div><input type="time" value={end} onChange={e=>setEnd(e.target.value)} style={{width:100}}/></div>
+      <div style={{flex:1,minWidth:100}}><div className="field-label">메모</div><input value={note} onChange={e=>setNote(e.target.value)} placeholder="예) 진로상담실" style={{width:'100%'}}/></div>
+      <button onClick={addSlot} disabled={adding} className="btn-success" style={{padding:'6px 16px'}}>+ 추가</button>
+    </div>
+
+    {/* 탭 */}
+    <div style={{display:'flex',gap:6,marginBottom:12}}>
+      {[['slots',`전체 슬롯 (${slots.length})`],['pending',`신청 대기 (${pending.length})`],['confirmed',`확정 (${confirmed.length})`]].map(([k,l])=>(
+        <button key={k} className={`tab ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{l}</button>))}
+    </div>
+
+    <div style={{overflowY:'auto',maxHeight:'45vh'}}>
+      {tab==='slots'&&(Object.keys(byDate).length===0?<div className="empty-state" style={{padding:30}}>등록된 슬롯이 없습니다</div>:
+        Object.entries(byDate).map(([d,daySlots])=>(
+          <div key={d} style={{marginBottom:14}}>
+            <div style={{fontWeight:700,fontSize:12,color:'var(--primary)',marginBottom:6,padding:'3px 8px',background:'#eef2ff',borderRadius:5,display:'inline-block'}}>{dayLabel(d)}</div>
+            {daySlots.map(s=>{
+              const req=Object.entries(requests).filter(([k,v])=>v.requestedSlots?.includes(s.id));
+              return(<div key={s.id} style={{display:'flex',gap:8,alignItems:'center',padding:'6px 10px',background:s.confirmedFor?'#f0fdf4':'white',border:`1px solid ${s.confirmedFor?'#a7f3d0':'var(--gray-200)'}`,borderRadius:7,marginBottom:4}}>
+                <span style={{fontWeight:600,fontSize:13,width:110,flexShrink:0}}>{s.startTime}~{s.endTime}</span>
+                {s.note&&<span style={{fontSize:11,color:'var(--gray-400)',width:80}}>{s.note}</span>}
+                {s.confirmedFor?(
+                  <><span className="badge badge-green">{s.confirmedFor} 확정</span>
+                  <button onClick={()=>unconfirm(s.id,s.confirmedFor)} style={{background:'none',color:'var(--gray-400)',fontSize:11,marginLeft:'auto'}}>취소</button></>
+                ):(
+                  <><span style={{fontSize:11,color:'var(--gray-500)'}}>신청 {req.length}명 {req.length>0&&`(${req.slice(0,3).map(([k,v])=>v.name||k).join(', ')}${req.length>3?'...':''})`}</span>
+                  {req.length>0&&(<select onChange={e=>{if(e.target.value)confirmSlot(s.id,e.target.value);}} style={{marginLeft:'auto',width:120,fontSize:11}} defaultValue="">
+                    <option value="">확정할 학생</option>
+                    {req.map(([k,v])=><option key={k} value={k}>{v.name||k}</option>)}
+                  </select>)}</>)}
+                <button onClick={()=>deleteSlot(s.id)} style={{background:'none',color:'var(--gray-300)',fontSize:14,marginLeft:req.length===0&&!s.confirmedFor?'auto':'4px'}}>🗑</button>
+              </div>);})}))}
+
+      {tab==='pending'&&(pending.length===0?<div className="empty-state" style={{padding:30}}>대기 중인 신청이 없습니다</div>:
+        pending.map(([sNum,req])=>(
+          <div key={sNum} style={{border:'1px solid var(--gray-200)',borderRadius:8,padding:12,marginBottom:8}}>
+            <div style={{fontWeight:600,marginBottom:6}}>{req.name} ({sNum})</div>
+            {req.studentNote&&<div style={{fontSize:11,color:'var(--gray-500)',marginBottom:6}}>메모: {req.studentNote}</div>}
+            <div style={{display:'flex',flexDirection:'column',gap:4}}>
+              {(req.requestedSlots||[]).map((sid,i)=>{const slot=slots.find(s=>s.id===sid);return slot?(
+                <div key={sid} style={{display:'flex',alignItems:'center',gap:8,background:'var(--gray-50)',borderRadius:5,padding:'5px 10px'}}>
+                  <span style={{fontSize:11,color:'var(--gray-400)}}>{i+1}순위</span>
+                  <span style={{fontSize:12,fontWeight:600}}>{slot.date} {slot.startTime}~{slot.endTime}</span>
+                  {slot.confirmedFor?<span className="badge badge-gray">이미 확정됨</span>:
+                    <button onClick={()=>confirmSlot(sid,sNum)} style={{marginLeft:'auto',background:'var(--success)',color:'white',padding:'3px 10px',fontSize:11,borderRadius:5,fontWeight:600}}>확정</button>}
+                </div>):null;})}
+            </div>
+          </div>)))}
+
+      {tab==='confirmed'&&(confirmed.length===0?<div className="empty-state" style={{padding:30}}>확정된 일정이 없습니다</div>:
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+          <thead><tr style={{background:'var(--gray-50)'}}>
+            {['날짜','시간','학생','메모'].map(h=><th key={h} style={{padding:'6px 10px',textAlign:'left',border:'1px solid var(--gray-200)',fontWeight:600}}>{h}</th>)}
+          </tr></thead>
+          <tbody>{confirmed.map(s=>{const req=requests[s.confirmedFor];return(
+            <tr key={s.id}>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)'}}>{dayLabel(s.date)}</td>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',fontWeight:600}}>{s.startTime}~{s.endTime}</td>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)'}}>{req?.name||s.confirmedFor}</td>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',color:'var(--gray-500)'}}>{s.note}</td>
+            </tr>);})}</tbody>
+        </table>)}
+    </div>
+  </div></div>);}
+
+/* ── Schedule Section (Student) ── */
+function ScheduleSection({studentNumber,studentName,cls}){
+  const [slots,setSlots]=useState([]);const [myReq,setMyReq]=useState(null);
+  const [selected,setSelected]=useState([]);const [memo,setMemo]=useState('');const [saving,setSaving]=useState(false);
+
+  useEffect(()=>{
+    const unsub=clsRef(cls).collection('slots').orderBy('date').orderBy('startTime').onSnapshot(snap=>setSlots(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    const unsub2=clsRef(cls).collection('requests').doc(studentNumber).onSnapshot(doc=>{if(doc.exists){setMyReq(doc.data());setSelected(doc.data().requestedSlots||[]);setMemo(doc.data().studentNote||'');}});
+    return()=>{unsub();unsub2();};
+  },[cls,studentNumber]);
+
+  const toggle=id=>{if(selected.includes(id)){setSelected(s=>s.filter(x=>x!==id));}else if(selected.length<3){setSelected(s=>[...s,id]);}else{alert('최대 3개까지 선택 가능합니다');}};
+  const submit=async()=>{setSaving(true);
+    await clsRef(cls).collection('requests').doc(studentNumber).set({studentNumber,name:studentName,requestedSlots:selected,studentNote:memo,status:myReq?.status||'pending',confirmedSlotId:myReq?.confirmedSlotId||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+    setSaving(false);alert('신청 완료!')};
+
+  const confirmedSlot=myReq?.confirmedSlotId?slots.find(s=>s.id===myReq.confirmedSlotId):null;
+  const available=slots.filter(s=>!s.confirmedFor||s.confirmedFor===studentNumber);
+  const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`};
+
+  if(slots.length===0)return(<div className="section-box"><div className="section-title">📅 상담 일정 신청</div><p style={{fontSize:12,color:'var(--gray-400)'}}>선생님이 아직 상담 가능 시간을 등록하지 않았습니다.</p></div>);
+
+  return(<div className="section-box">
+    <div className="section-title">📅 상담 일정 신청</div>
+    {confirmedSlot&&(
+      <div style={{background:'#f0fdf4',border:'2px solid #a7f3d0',borderRadius:8,padding:12,marginBottom:14,display:'flex',alignItems:'center',gap:10}}>
+        <span style={{fontSize:24}}>✅</span>
+        <div><div style={{fontWeight:700,color:'#15803d',fontSize:14}}>상담 일정 확정!</div>
+          <div style={{fontSize:13,fontWeight:600}}>{dayLabel(confirmedSlot.date)} {confirmedSlot.startTime}~{confirmedSlot.endTime}</div>
+          {confirmedSlot.note&&<div style={{fontSize:11,color:'var(--gray-500)'}}>{confirmedSlot.note}</div>}
+        </div>
+      </div>)}
+    <p style={{fontSize:12,color:'var(--gray-600)',marginBottom:10}}>희망하는 상담 시간을 최대 3개 선택하세요 ({selected.length}/3)</p>
+    <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:12}}>
+      {available.map((s,i)=>{
+        const isSel=selected.includes(s.id);const isConf=s.confirmedFor===studentNumber;const rank=selected.indexOf(s.id)+1;
+        return(<div key={s.id} onClick={()=>!isConf&&toggle(s.id)}
+          style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderRadius:7,cursor:isConf?'default':'pointer',
+            background:isConf?'#f0fdf4':isSel?'#eff6ff':'var(--gray-50)',border:`1px solid ${isConf?'#a7f3d0':isSel?'#93c5fd':'var(--gray-200)'}`,transition:'all .15s'}}>
+          <div style={{width:22,height:22,borderRadius:'50%',border:`2px solid ${isSel||isConf?'var(--primary)':'var(--gray-300)'}`,background:isSel?'var(--primary)':isConf?'var(--success)':'white',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+            {isConf?<span style={{fontSize:12,color:'white'}}>✓</span>:isSel?<span style={{fontSize:11,color:'white',fontWeight:700}}>{rank}</span>:null}
+          </div>
+          <div style={{flex:1}}>
+            <span style={{fontWeight:600,fontSize:13}}>{s.startTime}~{s.endTime}</span>
+            <span style={{fontSize:11,color:'var(--gray-400)',marginLeft:8}}>{dayLabel(s.date)}</span>
+            {s.note&&<span style={{fontSize:11,color:'var(--gray-400)',marginLeft:6}}>{s.note}</span>}
+          </div>
+          {isConf&&<span className="badge badge-green">확정</span>}
+        </div>);})}
+    </div>
+    <div style={{marginBottom:10}}><div className="field-label">메모 (선생님께 전달할 말)</div>
+      <input value={memo} onChange={e=>setMemo(e.target.value)} placeholder="예) 방과후 시간은 어렵습니다" style={{width:'100%'}}/></div>
+    <button onClick={submit} disabled={saving||selected.length===0} style={{width:'100%',padding:'10px',background:selected.length>0?'var(--primary)':'var(--gray-200)',color:selected.length>0?'white':'var(--gray-400)',fontWeight:700,borderRadius:7,fontSize:13}}>
+      {saving?'신청 중...':`${selected.length}개 시간 신청하기`}
+    </button>
+  </div>);}
 function TeacherDashboard({user,onLogout}){
   const [currentCls,setCurrentCls]=useState(null);
   const [students,setStudents]=useState([]);
@@ -423,6 +596,7 @@ function TeacherDashboard({user,onLogout}){
   const [filter,setFilter]=useState('전체');
   const [bulkModal,setBulkModal]=useState(false);
   const [acctModal,setAcctModal]=useState(null);
+  const [scheduleModal,setScheduleModal]=useState(false);
   const [projectId,setProjectId]=useState('');
   const [teacherName,setTeacherName]=useState('');
 
@@ -523,6 +697,7 @@ function TeacherDashboard({user,onLogout}){
         {['전체','완료','미완료','계정있음','계정없음'].map(f=><button key={f} className={`tab ${filter===f?'active':''}`} onClick={()=>setFilter(f)}>{f}</button>)}
       </div>
       <div style={{marginLeft:'auto',display:'flex',gap:6}}>
+        <button onClick={()=>setScheduleModal(true)} style={{background:'#0369a1',color:'white',fontWeight:600,padding:'7px 12px',fontSize:12,borderRadius:6}}>📅 상담 일정</button>
         <button onClick={printAllAccounts} style={{background:'#0f766e',color:'white',fontWeight:600,padding:'7px 12px',fontSize:12,borderRadius:6}}>🖨️ 계정카드 인쇄</button>
         <button onClick={()=>setBulkModal(true)} style={{background:'#7c3aed',color:'white',fontWeight:700,padding:'7px 14px',fontSize:12,borderRadius:6}}>🔑 계정 생성 ({students.filter(s=>!s.authUid).length}명)</button>
         <details style={{display:'inline'}}><summary style={{background:'var(--gray-200)',color:'var(--gray-500)',padding:'7px 10px',fontSize:11,borderRadius:6,cursor:'pointer',listStyle:'none'}}>⚙</summary>
@@ -559,6 +734,7 @@ function TeacherDashboard({user,onLogout}){
 
     {bulkModal&&<BulkAccountModal students={students} cls={currentCls} projectId={projectId} onClose={()=>setBulkModal(false)}/>}
     {acctModal&&<AccountInfoModal student={acctModal} projectId={projectId} onClose={()=>setAcctModal(null)}/>}
+    {scheduleModal&&<ScheduleModal cls={currentCls} onClose={()=>setScheduleModal(false)}/>}
   </div>);}
 
 /* ── Student Dashboard ── */
