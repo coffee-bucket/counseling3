@@ -88,8 +88,8 @@ button:hover{opacity:.88;}
   .jungsi-tbl th{background:#eef2ff;} .jungsi-tbl td{text-align:center;}
   .gun-cell{font-weight:700;color:#4f46e5;background:#eef2ff;}
 
-  .diff-안정{color:#15803d;font-weight:700;} .diff-적정{color:#1d4ed8;font-weight:700;}
-  .diff-소신{color:#854d0e;font-weight:700;} .diff-도전{color:#991b1b;font-weight:700;}
+  .diff-상향{color:#991b1b;font-weight:700;} .diff-소신{color:#854d0e;font-weight:700;}
+  .diff-적정{color:#1d4ed8;font-weight:700;} .diff-안정{color:#15803d;font-weight:700;} .diff-하향{color:#6b21a8;font-weight:700;}
 
   .print-footer{margin-top:10px;font-size:9px;color:#888;text-align:right;border-top:1px solid #ddd;padding-top:4px;}
 }
@@ -202,11 +202,11 @@ function SusiEntryRow({entry,onChange,onDelete}){
   const setR=(k,v)=>onChange({...entry,ratio:{...entry.ratio,[k]:v}});
   const setSc=(k,v)=>onChange({...entry,schedule:{...entry.schedule,[k]:v}});
   const setRes=(i,k,v)=>{const r=[...entry.results];r[i]={...r[i],[k]:v};onChange({...entry,results:r});};
-  const cat=entry.category==='후보'?'susi-entry cat-후보':entry.category==='전문대'?'susi-entry cat-전문대':'susi-entry cat-4year';
+  const cat=entry.category==='전문대'?'susi-entry cat-전문대':'susi-entry cat-4year';
   return(<div className={cat}>
     <div className="susi-row">
       <select value={entry.category} onChange={e=>set('category',e.target.value)} style={{width:64,fontWeight:600,fontSize:11}}>
-        {['4년제','후보','전문대'].map(c=><option key={c}>{c}</option>)}
+        {['4년제','전문대'].map(c=><option key={c}>{c}</option>)}
       </select>
       <input value={entry.univ||''} onChange={e=>set('univ',e.target.value)} placeholder="대학명" style={{flex:1.5,minWidth:90}}/>
       <select value={entry.jType||'교과'} onChange={e=>set('jType',e.target.value)} style={{width:56,fontSize:11}}>
@@ -228,9 +228,9 @@ function SusiEntryRow({entry,onChange,onDelete}){
         <input value={entry.suneungMin||''} onChange={e=>set('suneungMin',e.target.value)} placeholder="예) 2합4" style={{width:90}}/>
       </div>
       <div style={{display:'flex',alignItems:'center',gap:4,marginLeft:4}}>
-        <span style={{fontSize:11,color:'var(--gray-500)',fontWeight:600}}>난이도</span>
+        <span style={{fontSize:11,color:'var(--gray-500)',fontWeight:600}}>가능성</span>
         <select value={entry.difficulty||''} onChange={e=>set('difficulty',e.target.value)} style={{width:68,fontSize:11}}>
-          <option value="">-</option><option>안정</option><option>적정</option><option>소신</option><option>도전</option>
+          <option value="">-</option><option>상향</option><option>소신</option><option>적정</option><option>안정</option><option>하향</option>
         </select>
       </div>
     </div>
@@ -275,7 +275,7 @@ function JungsiSection({jungsiList,onChange}){
           <div style={{textAlign:'center'}}><div className="mini-label">25입결</div>
             <input value={e.result2025||''} onChange={ev=>update(idx,{...e,result2025:ev.target.value})} style={{width:56,textAlign:'center',fontSize:11}}/></div>
           <select value={e.difficulty||''} onChange={ev=>update(idx,{...e,difficulty:ev.target.value})} style={{width:62,fontSize:11}}>
-            <option value="">난이도</option><option>안정</option><option>적정</option><option>소신</option><option>도전</option>
+            <option value="">가능성</option><option>상향</option><option>소신</option><option>적정</option><option>안정</option><option>하향</option>
           </select>
           <input value={e.note||''} onChange={ev=>update(idx,{...e,note:ev.target.value})} placeholder="특이사항" style={{flex:2,minWidth:80}}/>
         </div>))}
@@ -335,10 +335,10 @@ function PrintView({data,classInfo}){
         <th>구분</th><th>대학</th><th>전형</th><th>전형명</th><th>학과</th><th>인원</th>
         <th>내신%</th><th>서류%</th><th>면접%</th><th>수능최저</th>
         <th>25년 경쟁/충원/평균</th><th>24년 경쟁/충원/평균</th>
-        <th>면접일</th><th>최종발표</th><th>난이도</th><th>비고/판단</th>
+        <th>면접일</th><th>최종발표</th><th>가능성</th><th>비고/판단</th>
       </tr></thead>
       <tbody>{susi.map((e,i)=>(
-        <tr key={i} className={e.category==='후보'?'cat-후보':e.category==='전문대'?'cat-전문대':'cat-4year'}>
+        <tr key={i} className={e.category==='전문대'?'cat-전문대':'cat-4year'}>
           <td className="center">{e.category}</td>
           <td style={{fontWeight:600}}>{e.univ}</td>
           <td className="center">{e.jType}</td><td>{e.jName}</td><td>{e.major}</td>
@@ -356,7 +356,7 @@ function PrintView({data,classInfo}){
 
     <div className="sec-title">📋 정시 지원 계획</div>
     <table className="jungsi-tbl" style={{marginBottom:8}}>
-      <thead><tr><th>군</th><th>순번</th><th>대학</th><th>모집단위(학과)</th><th>26입결</th><th>25입결</th><th>난이도</th><th>특이사항</th></tr></thead>
+      <thead><tr><th>군</th><th>순번</th><th>대학</th><th>모집단위(학과)</th><th>26입결</th><th>25입결</th><th>가능성</th><th>특이사항</th></tr></thead>
       <tbody>{['가','나','다'].map(gun=>jungsi.filter(e=>e.gun===gun).map((e,i)=>(
         <tr key={`${gun}${i}`}>
           {i===0&&<td className="gun-cell" rowSpan={jungsi.filter(r=>r.gun===gun).length}>{gun}군</td>}
