@@ -519,11 +519,14 @@ function ScheduleModal({cls,onClose}){
 
   // Group slots by date
   const byDate={};slots.forEach(s=>{if(!byDate[s.date])byDate[s.date]=[];byDate[s.date].push(s);});
-  const confirmed=slots.filter(s=>s.confirmedFor);
+  const confirmed=slots.filter(s=>s.confirmedFor&&requests[s.confirmedFor]?.status==='confirmed');
   const pending=Object.entries(requests).filter(([k,v])=>v.status!=='confirmed'&&v.requestedSlots?.length>0);
 
   const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`;};
-  const slotLabel=s=>s.period?`${Number(s.period)}교시`:s.startTime?.match(/^\d{2}교시$/)?`${Number(s.startTime.slice(0,2))}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
+  const periodTimes={0:'08:00~08:50',8:'17:00~17:50',9:'18:00~18:50',10:'19:00~19:50',11:'20:00~20:50',12:'21:00~21:50'};
+  const periodNum=s=>s.period!==undefined&&s.period!==''?Number(s.period):s.startTime?.match(/^\d{2}교시$/)?Number(s.startTime.slice(0,2)):null;
+  const periodLabel=n=>periodTimes[n]?`${n}교시 (${periodTimes[n]})`:`${n}교시`;
+  const slotLabel=s=>{const n=periodNum(s);return n!==null?periodLabel(n):`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;};
   const place=s=>s.location||s.note||'';
 
   return(<div className="modal-bg" onClick={onClose}><div className="modal" style={{width:620,maxHeight:'85vh'}} onClick={e=>e.stopPropagation()}>
@@ -535,7 +538,7 @@ function ScheduleModal({cls,onClose}){
     {/* 슬롯 추가 */}
     <div style={{background:'var(--gray-50)',borderRadius:8,padding:12,marginBottom:14,display:'flex',gap:6,alignItems:'flex-end',flexWrap:'wrap'}}>
       <div><div className="field-label">날짜</div><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{width:140}}/></div>
-      <div><div className="field-label">교시</div><select value={period} onChange={e=>setPeriod(e.target.value)} style={{width:120}}><option value="">선택</option>{Array.from({length:10},(_,i)=><option key={i+1} value={i+1}>{i+1}교시</option>)}</select></div>
+      <div><div className="field-label">교시</div><select value={period} onChange={e=>setPeriod(e.target.value)} style={{width:190}}><option value="">선택</option>{Array.from({length:13},(_,i)=><option key={i} value={i}>{periodLabel(i)}</option>)}</select></div>
       <div style={{flex:1,minWidth:140}}><div className="field-label">장소</div><input value={location} onChange={e=>setLocation(e.target.value)} placeholder="예) 진로상담실" style={{width:'100%'}}/></div>
       <button onClick={addSlot} disabled={adding} className="btn-success" style={{padding:'6px 16px'}}>+ 추가</button>
     </div>
@@ -553,12 +556,14 @@ function ScheduleModal({cls,onClose}){
             <div style={{fontWeight:700,fontSize:12,color:'var(--primary)',marginBottom:6,padding:'3px 8px',background:'#eef2ff',borderRadius:5,display:'inline-block'}}>{dayLabel(d)}</div>
             {daySlots.map(s=>{
               const req=Object.entries(requests).filter(([k,v])=>v.requestedSlots?.includes(s.id));
+              const reqStatus=s.confirmedFor&&requests[s.confirmedFor]?.status;
               return(<div key={s.id} style={{display:'flex',gap:8,alignItems:'center',padding:'6px 10px',background:s.confirmedFor?'#f0fdf4':'white',border:`1px solid ${s.confirmedFor?'#a7f3d0':'var(--gray-200)'}`,borderRadius:7,marginBottom:4}}>
-                <span style={{fontWeight:600,fontSize:13,width:70,flexShrink:0}}>{slotLabel(s)}</span>
+                <span style={{fontWeight:600,fontSize:13,width:150,flexShrink:0}}>{slotLabel(s)}</span>
                 {place(s)&&<span style={{fontSize:11,color:'var(--gray-400)',width:100}}>{place(s)}</span>}
                 {s.confirmedFor?(
-                  <><span className="badge badge-green">{s.confirmedFor} 확정</span>
-                  <button onClick={()=>unconfirm(s.id,s.confirmedFor)} style={{background:'none',color:'var(--gray-400)',fontSize:11,marginLeft:'auto'}}>취소</button></>
+                  <><span className={`badge ${reqStatus==='confirmed'?'badge-green':'badge-blue'}`}>{s.confirmedFor} {reqStatus==='confirmed'?'확정':'신청 마감'}</span>
+                  {reqStatus!=='confirmed'&&<button onClick={()=>confirmSlot(s.id,s.confirmedFor)} style={{marginLeft:'auto',background:'var(--success)',color:'white',padding:'3px 10px',fontSize:11,borderRadius:5,fontWeight:600}}>확정</button>}
+                  <button onClick={()=>unconfirm(s.id,s.confirmedFor)} style={{background:'none',color:'var(--gray-400)',fontSize:11,marginLeft:reqStatus==='confirmed'?'auto':'4px'}}>취소</button></>
                 ):(
                   <><span style={{fontSize:11,color:'var(--gray-500)'}}>신청 {req.length}명 {req.length>0&&`(${req.slice(0,3).map(([k,v])=>v.name||k).join(', ')}${req.length>3?'...':''})`}</span>
                   {req.length>0&&(<select onChange={e=>{if(e.target.value)confirmSlot(s.id,e.target.value);}} style={{marginLeft:'auto',width:120,fontSize:11}} defaultValue="">
@@ -614,21 +619,38 @@ function ScheduleSection({studentNumber,studentName,cls}){
     return()=>{unsub();unsub2();};
   },[cls,studentNumber]);
 
-  const toggle=id=>{if(selected.includes(id)){setSelected(s=>s.filter(x=>x!==id));}else if(selected.length<3){setSelected(s=>[...s,id]);}else{alert('최대 3개까지 선택 가능합니다');}};
+  const toggle=id=>{if(selected.includes(id)){setSelected([]);}else{setSelected([id]);}};
   const submit=async()=>{
     if(selected.length===0){alert('신청할 일정을 선택하세요');return;}
     setSaving(true);
     try{
-      const confirmedStillSelected=myReq?.confirmedSlotId&&selected.includes(myReq.confirmedSlotId);
-      await clsRef(cls).collection('requests').doc(studentNumber).set({
-        studentNumber,
-        name:studentName,
-        requestedSlots:selected,
-        studentNote:memo,
-        status:confirmedStillSelected?'confirmed':'pending',
-        confirmedSlotId:confirmedStillSelected?myReq.confirmedSlotId:'',
-        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-      },{merge:true});
+      const slotId=selected[0];
+      const requestRef=clsRef(cls).collection('requests').doc(studentNumber);
+      await db.runTransaction(async tx=>{
+        const requestDoc=await tx.get(requestRef);
+        const prevReq=requestDoc.exists?requestDoc.data():{};
+        if(prevReq.status==='confirmed'&&prevReq.confirmedSlotId&&prevReq.confirmedSlotId!==slotId){
+          throw new Error('이미 확정된 일정은 변경할 수 없습니다. 선생님께 문의하세요.');
+        }
+        const prevSlots=(prevReq.requestedSlots||[]).filter(id=>id&&id!==slotId);
+        const slotRef=clsRef(cls).collection('slots').doc(slotId);
+        const slotDoc=await tx.get(slotRef);
+        const prevSlotDocs=await Promise.all(prevSlots.map(id=>tx.get(clsRef(cls).collection('slots').doc(id))));
+        if(!slotDoc.exists)throw new Error('선택한 일정이 삭제되었습니다.');
+        const slotData=slotDoc.data();
+        if(slotData.confirmedFor&&slotData.confirmedFor!==studentNumber)throw new Error('이미 다른 학생이 신청한 일정입니다.');
+        tx.update(slotRef,{confirmedFor:studentNumber});
+        prevSlotDocs.forEach(doc=>{if(doc.exists&&doc.data().confirmedFor===studentNumber)tx.update(doc.ref,{confirmedFor:''});});
+        tx.set(requestRef,{
+          studentNumber,
+          name:studentName,
+          requestedSlots:[slotId],
+          studentNote:memo,
+          status:prevReq.status==='confirmed'?'confirmed':'pending',
+          confirmedSlotId:prevReq.status==='confirmed'?prevReq.confirmedSlotId:'',
+          updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+        },{merge:true});
+      });
       alert('신청 완료!');
     }catch(e){
       console.error(e);alert('상담 신청 저장 실패: '+(e.message||e));
@@ -638,7 +660,10 @@ function ScheduleSection({studentNumber,studentName,cls}){
   const confirmedSlot=myReq?.confirmedSlotId?slots.find(s=>s.id===myReq.confirmedSlotId):null;
   const available=slots.filter(s=>!s.confirmedFor||s.confirmedFor===studentNumber);
   const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`};
-  const slotLabel=s=>s.period?`${Number(s.period)}교시`:s.startTime?.match(/^\d{2}교시$/)?`${Number(s.startTime.slice(0,2))}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
+  const periodTimes={0:'08:00~08:50',8:'17:00~17:50',9:'18:00~18:50',10:'19:00~19:50',11:'20:00~20:50',12:'21:00~21:50'};
+  const periodNum=s=>s.period!==undefined&&s.period!==''?Number(s.period):s.startTime?.match(/^\d{2}교시$/)?Number(s.startTime.slice(0,2)):null;
+  const periodLabel=n=>periodTimes[n]?`${n}교시 (${periodTimes[n]})`:`${n}교시`;
+  const slotLabel=s=>{const n=periodNum(s);return n!==null?periodLabel(n):`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;};
   const place=s=>s.location||s.note||'';
 
   if(slots.length===0)return(<div className="section-box"><div className="section-title">📅 상담 일정 신청</div><p style={{fontSize:12,color:'var(--gray-400)'}}>선생님이 아직 상담 가능 시간을 등록하지 않았습니다.</p></div>);
@@ -653,7 +678,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
           {place(confirmedSlot)&&<div style={{fontSize:11,color:'var(--gray-500)'}}>{place(confirmedSlot)}</div>}
         </div>
       </div>)}
-    <p style={{fontSize:12,color:'var(--gray-600)',marginBottom:10}}>희망하는 상담 일정을 최대 3개 선택하세요 ({selected.length}/3)</p>
+    <p style={{fontSize:12,color:'var(--gray-600)',marginBottom:10}}>희망하는 상담 일정을 1개 선택하세요. 신청하면 해당 일정은 선착순 마감됩니다.</p>
     <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:12}}>
       {available.map((s,i)=>{
         const isSel=selected.includes(s.id);const isConf=s.confirmedFor===studentNumber;const rank=selected.indexOf(s.id)+1;
@@ -661,7 +686,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
           style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderRadius:7,cursor:isConf?'default':'pointer',
             background:isConf?'#f0fdf4':isSel?'#eff6ff':'var(--gray-50)',border:`1px solid ${isConf?'#a7f3d0':isSel?'#93c5fd':'var(--gray-200)'}`,transition:'all .15s'}}>
           <div style={{width:22,height:22,borderRadius:'50%',border:`2px solid ${isSel||isConf?'var(--primary)':'var(--gray-300)'}`,background:isSel?'var(--primary)':isConf?'var(--success)':'white',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-            {isConf?<span style={{fontSize:12,color:'white'}}>✓</span>:isSel?<span style={{fontSize:11,color:'white',fontWeight:700}}>{rank}</span>:null}
+            {isConf?<span style={{fontSize:12,color:'white'}}>✓</span>:isSel?<span style={{fontSize:11,color:'white',fontWeight:700}}>1</span>:null}
           </div>
           <div style={{flex:1}}>
             <span style={{fontWeight:600,fontSize:13}}>{slotLabel(s)}</span>
@@ -674,7 +699,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
     <div style={{marginBottom:10}}><div className="field-label">메모 (선생님께 전달할 말)</div>
       <input value={memo} onChange={e=>setMemo(e.target.value)} placeholder="예) 제 등급으로 갈 수 있는 대학이 궁금해요" style={{width:'100%'}}/></div>
     <button onClick={submit} disabled={saving||selected.length===0} style={{width:'100%',padding:'10px',background:selected.length>0?'var(--primary)':'var(--gray-200)',color:selected.length>0?'white':'var(--gray-400)',fontWeight:700,borderRadius:7,fontSize:13}}>
-      {saving?'신청 중...':`${selected.length}개 일정 신청하기`}
+      {saving?'신청 중...':'선택한 일정 신청하기'}
     </button>
   </div>);}
 function TeacherDashboard({user,onLogout}){
