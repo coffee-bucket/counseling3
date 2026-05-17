@@ -450,10 +450,11 @@ function ScheduleModal({cls,onClose}){
   const [adding,setAdding]=useState(false);const [tab,setTab]=useState('slots');
 
   useEffect(()=>{
-    const unsub=clsRef(cls).collection('slots').orderBy('date').orderBy('startTime')
-      .onSnapshot(snap=>setSlots(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    const sortSlots=list=>list.sort((a,b)=>`${a.date||''} ${a.startTime||''}`.localeCompare(`${b.date||''} ${b.startTime||''}`));
+    const unsub=clsRef(cls).collection('slots')
+      .onSnapshot(snap=>setSlots(sortSlots(snap.docs.map(d=>({id:d.id,...d.data()})))),err=>{console.error(err);alert('상담 일정 불러오기 실패: '+(err.message||err));});
     const unsub2=clsRef(cls).collection('requests')
-      .onSnapshot(snap=>{const m={};snap.docs.forEach(d=>m[d.id]=d.data());setRequests(m);});
+      .onSnapshot(snap=>{const m={};snap.docs.forEach(d=>m[d.id]=d.data());setRequests(m);},err=>{console.error(err);alert('상담 신청 불러오기 실패: '+(err.message||err));});
     return()=>{unsub();unsub2();};
   },[cls]);
 
@@ -462,22 +463,48 @@ function ScheduleModal({cls,onClose}){
     setAdding(true);
     try{
       const placeText=(location||DEFAULT_LOCATION).trim();
-      await clsRef(cls).collection('slots').add({date,startTime:`${String(period).padStart(2,'0')}교시`,endTime:'',note:placeText,confirmedFor:'',createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+      await clsRef(cls).collection('slots').add({
+        date,
+        period:Number(period),
+        startTime:`${String(period).padStart(2,'0')}교시`,
+        endTime:'',
+        location:placeText,
+        note:placeText,
+        status:'open',
+        confirmedFor:'',
+        createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+      });
       setPeriod('');setLocation(DEFAULT_LOCATION);
     }catch(e){
       console.error(e);alert('상담 일정 추가 실패: '+(e.message||e));
     }finally{setAdding(false);}
   };
 
-  const deleteSlot=async id=>{if(!window.confirm('삭제하시겠습니까?'))return;await clsRef(cls).collection('slots').doc(id).delete();};
+  const deleteSlot=async id=>{
+    if(!window.confirm('삭제하시겠습니까?'))return;
+    try{await clsRef(cls).collection('slots').doc(id).delete();}
+    catch(e){console.error(e);alert('상담 일정 삭제 실패: '+(e.message||e));}
+  };
 
   const confirmSlot=async(slotId,studentNum)=>{
-    await clsRef(cls).collection('slots').doc(slotId).update({confirmedFor:studentNum});
-    await clsRef(cls).collection('requests').doc(studentNum).update({confirmedSlotId:slotId,status:'confirmed'});};
+    try{
+      const req=requests[studentNum]||{};
+      const batch=db.batch();
+      batch.update(clsRef(cls).collection('slots').doc(slotId),{confirmedFor:studentNum,status:'confirmed',updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      batch.set(clsRef(cls).collection('requests').doc(studentNum),{...req,studentNumber:studentNum,confirmedSlotId:slotId,status:'confirmed',confirmedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+      await batch.commit();
+    }catch(e){console.error(e);alert('상담 일정 확정 실패: '+(e.message||e));}
+  };
 
   const unconfirm=async(slotId,studentNum)=>{
-    await clsRef(cls).collection('slots').doc(slotId).update({confirmedFor:''});
-    await clsRef(cls).collection('requests').doc(studentNum).update({confirmedSlotId:'',status:'pending'});};
+    try{
+      const batch=db.batch();
+      batch.update(clsRef(cls).collection('slots').doc(slotId),{confirmedFor:'',status:'open',updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      batch.set(clsRef(cls).collection('requests').doc(studentNum),{confirmedSlotId:'',status:'pending',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+      await batch.commit();
+    }catch(e){console.error(e);alert('상담 일정 확정 취소 실패: '+(e.message||e));}
+  };
 
   // Group slots by date
   const byDate={};slots.forEach(s=>{if(!byDate[s.date])byDate[s.date]=[];byDate[s.date].push(s);});
@@ -485,7 +512,7 @@ function ScheduleModal({cls,onClose}){
   const pending=Object.entries(requests).filter(([k,v])=>v.status!=='confirmed'&&v.requestedSlots?.length>0);
 
   const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`;};
-  const slotLabel=s=>s.period?`${s.period}교시`:s.startTime?.match(/^\d{2}교시$/)?`${Number(s.startTime.slice(0,2))}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
+  const slotLabel=s=>s.period?`${Number(s.period)}교시`:s.startTime?.match(/^\d{2}교시$/)?`${Number(s.startTime.slice(0,2))}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
   const place=s=>s.location||s.note||'';
 
   return(<div className="modal-bg" onClick={onClose}><div className="modal" style={{width:620,maxHeight:'85vh'}} onClick={e=>e.stopPropagation()}>
@@ -570,20 +597,37 @@ function ScheduleSection({studentNumber,studentName,cls}){
   const [selected,setSelected]=useState([]);const [memo,setMemo]=useState('');const [saving,setSaving]=useState(false);
 
   useEffect(()=>{
-    const unsub=clsRef(cls).collection('slots').orderBy('date').orderBy('startTime').onSnapshot(snap=>setSlots(snap.docs.map(d=>({id:d.id,...d.data()}))));
-    const unsub2=clsRef(cls).collection('requests').doc(studentNumber).onSnapshot(doc=>{if(doc.exists){setMyReq(doc.data());setSelected(doc.data().requestedSlots||[]);setMemo(doc.data().studentNote||'');}});
+    const sortSlots=list=>list.sort((a,b)=>`${a.date||''} ${a.startTime||''}`.localeCompare(`${b.date||''} ${b.startTime||''}`));
+    const unsub=clsRef(cls).collection('slots').onSnapshot(snap=>setSlots(sortSlots(snap.docs.map(d=>({id:d.id,...d.data()})))),err=>{console.error(err);alert('상담 일정 불러오기 실패: '+(err.message||err));});
+    const unsub2=clsRef(cls).collection('requests').doc(studentNumber).onSnapshot(doc=>{if(doc.exists){setMyReq(doc.data());setSelected(doc.data().requestedSlots||[]);setMemo(doc.data().studentNote||'');}},err=>{console.error(err);alert('내 상담 신청 불러오기 실패: '+(err.message||err));});
     return()=>{unsub();unsub2();};
   },[cls,studentNumber]);
 
   const toggle=id=>{if(selected.includes(id)){setSelected(s=>s.filter(x=>x!==id));}else if(selected.length<3){setSelected(s=>[...s,id]);}else{alert('최대 3개까지 선택 가능합니다');}};
-  const submit=async()=>{setSaving(true);
-    await clsRef(cls).collection('requests').doc(studentNumber).set({studentNumber,name:studentName,requestedSlots:selected,studentNote:memo,status:myReq?.status||'pending',confirmedSlotId:myReq?.confirmedSlotId||'',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
-    setSaving(false);alert('신청 완료!')};
+  const submit=async()=>{
+    if(selected.length===0){alert('신청할 일정을 선택하세요');return;}
+    setSaving(true);
+    try{
+      const confirmedStillSelected=myReq?.confirmedSlotId&&selected.includes(myReq.confirmedSlotId);
+      await clsRef(cls).collection('requests').doc(studentNumber).set({
+        studentNumber,
+        name:studentName,
+        requestedSlots:selected,
+        studentNote:memo,
+        status:confirmedStillSelected?'confirmed':'pending',
+        confirmedSlotId:confirmedStillSelected?myReq.confirmedSlotId:'',
+        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+      },{merge:true});
+      alert('신청 완료!');
+    }catch(e){
+      console.error(e);alert('상담 신청 저장 실패: '+(e.message||e));
+    }finally{setSaving(false);}
+  };
 
   const confirmedSlot=myReq?.confirmedSlotId?slots.find(s=>s.id===myReq.confirmedSlotId):null;
-  const available=slots.filter(s=>!s.confirmedFor||s.confirmedFor===studentNumber);
+  const available=slots.filter(s=>(s.status!=='confirmed'&&!s.confirmedFor)||s.confirmedFor===studentNumber);
   const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`};
-  const slotLabel=s=>s.period?`${s.period}교시`:s.startTime?.match(/^\d{2}교시$/)?`${Number(s.startTime.slice(0,2))}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
+  const slotLabel=s=>s.period?`${Number(s.period)}교시`:s.startTime?.match(/^\d{2}교시$/)?`${Number(s.startTime.slice(0,2))}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
   const place=s=>s.location||s.note||'';
 
   if(slots.length===0)return(<div className="section-box"><div className="section-title">📅 상담 일정 신청</div><p style={{fontSize:12,color:'var(--gray-400)'}}>선생님이 아직 상담 가능 시간을 등록하지 않았습니다.</p></div>);
