@@ -60,6 +60,7 @@ button:hover{opacity:.88;} button:disabled{opacity:.5;cursor:not-allowed;}
 .jungsi-row{display:flex;gap:5px;align-items:center;padding:5px 6px;background:var(--gray-50);border-radius:5px;border:1px solid var(--gray-100);margin-bottom:4px;}
 
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:1000;}
+@media print{.modal-bg{display:none!important;}}
 .modal{background:white;border-radius:14px;padding:28px;width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);}
 .tab{padding:5px 14px;background:var(--gray-100);color:var(--gray-600);border-radius:5px;font-size:12px;}
 .tab.active{background:var(--primary);color:white;font-weight:600;}
@@ -172,7 +173,7 @@ function LoginScreen({projectId}){
   if(mode==='select')return(<div className="center-screen"><div className="card" style={{width:400,textAlign:'center'}}>
     <div style={{fontSize:48,marginBottom:12}}>🎓</div>
     <h1 style={{fontSize:22,fontWeight:700,marginBottom:4}}>수시·정시 상담 관리</h1>
-    <p style={{color:'var(--gray-500)',fontSize:13,marginBottom:28}}>양주백석고등학교 진로진학상담실</p>
+    <p style={{color:'var(--gray-500)',fontSize:13,marginBottom:28}}>양주백석고 3학년부</p>
     <div style={{display:'flex',flexDirection:'column',gap:12}}>
       <button onClick={()=>setMode('teacher')} style={{padding:'14px',background:'linear-gradient(135deg,#5b6cf8,#8b5cf6)',color:'white',fontWeight:700,fontSize:15,borderRadius:10}}>👩‍🏫 선생님 로그인</button>
       <button onClick={()=>setMode('student')} style={{padding:'14px',background:'linear-gradient(135deg,#f59e0b,#f97316)',color:'white',fontWeight:700,fontSize:15,borderRadius:10}}>👨‍🎓 학생 로그인</button>
@@ -268,7 +269,7 @@ function BulkAccountModal({students,teacherUid,projectId,cls,onClose}){
         await secAuth.signOut();
         try{await secApp.delete();}catch(e){}
         // Save to Firestore
-        await db.collection('studentAccounts').doc(s.studentNumber).set({uid:authUid,studentNumber:s.studentNumber,name:s.name,teacherUid,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
+        await db.collection('studentAccounts').doc(s.studentNumber).set({uid:authUid,studentNumber:s.studentNumber,name:s.name,teacherUid,password:pw,createdAt:firebase.firestore.FieldValue.serverTimestamp()});
         await db.collection('teachers').doc(teacherUid).collection('students').doc(s.studentNumber).update({authUid});
         newResults.push({...s,pw,authUid});
       }catch(e){
@@ -283,10 +284,7 @@ function BulkAccountModal({students,teacherUid,projectId,cls,onClose}){
     }
     setResults(newResults);setErrors(newErrors);setPhase('done');};
 
-  const printCards=()=>{
-    document.querySelector('.cred-page').style.display='block';
-    window.print();
-    document.querySelector('.cred-page').style.display='none';};
+  const printCards=()=>{onPrint(results);onClose();};
 
   const APP_URL='coffee-bucket.github.io/counseling';
 
@@ -330,31 +328,78 @@ function BulkAccountModal({students,teacherUid,projectId,cls,onClose}){
       </>)}
     </div></div>
 
-    {/* 인쇄용 계정 카드 - 화면에서는 숨김, 인쇄시만 표시 */}
-    <div className="cred-page no-print" style={{display:'none'}}>
-      <div className="cred-grid">
-        {results.filter(r=>r.pw!=='(기존계정)').map((s,i)=>(
-          <div key={i} className="cred-card">
-            <div className="cred-school">🎓 양주백석고등학교 진로진학상담실</div>
-            <div className="cred-cls">3학년 {cls}반 · {s.no}번</div>
-            <div className="cred-name">{s.name}</div>
-            <hr className="cred-divider"/>
-            <div className="cred-url">🌐 {APP_URL}</div>
-            <div className="cred-id-row">
-              <span className="cred-label">아이디(학번)</span>
-              <span className="cred-value">{s.studentNumber}</span>
-            </div>
-            <div className="cred-id-row">
-              <span className="cred-label">비밀번호</span>
-              <span className="cred-pw">{s.pw}</span>
-            </div>
-            <div style={{fontSize:9,color:'#999',marginTop:6}}>* 비밀번호는 안전한 곳에 보관하세요</div>
-          </div>))}
-      </div>
-    </div>
   </>);}
 
-/* ── Grade / Susi / Jungsi / Print components (same as before) ── */
+/* ── Credential Print Page (rendered at dashboard level) ── */
+function CredPrintPage({results,cls}){
+  const APP_URL='coffee-bucket.github.io/counseling';
+  return(<div className="cred-page">
+    <div className="cred-grid">
+      {results.filter(r=>r.pw&&r.pw!=='(기존계정)').map((s,i)=>(
+        <div key={i} className="cred-card">
+          <div className="cred-school">🎓 양주백석고 3학년부</div>
+          <div className="cred-cls">3학년 {cls}반 · {s.no}번</div>
+          <div className="cred-name">{s.name}</div>
+          <hr className="cred-divider"/>
+          <div className="cred-url">🌐 {APP_URL}</div>
+          <div className="cred-id-row"><span className="cred-label">아이디(학번)</span><span className="cred-value">{s.studentNumber}</span></div>
+          <div className="cred-id-row"><span className="cred-label">비밀번호</span><span className="cred-pw">{s.pw}</span></div>
+          <div style={{fontSize:9,color:'#999',marginTop:6}}>* 비밀번호는 안전한 곳에 보관하세요</div>
+        </div>))}
+    </div>
+  </div>);}
+
+/* ── Account Info Modal (view/reset password) ── */
+function AccountInfoModal({student,projectId,teacherUid,onClose}){
+  const [acct,setAcct]=useState(null);const [loading,setLoading]=useState(true);const [resetting,setResetting]=useState(false);const [newPw,setNewPw]=useState('');
+
+  useEffect(()=>{
+    db.collection('studentAccounts').doc(student.studentNumber).get()
+      .then(doc=>{if(doc.exists)setAcct(doc.data());setLoading(false);})
+      .catch(()=>setLoading(false));
+  },[student.studentNumber]);
+
+  const reset=async()=>{
+    setResetting(true);
+    const pw=genPw();
+    const email=sEmail(student.studentNumber,projectId);
+    try{
+      const secApp=firebase.initializeApp(FB_CONFIG,'reset_'+Date.now());
+      const secAuth=secApp.auth();
+      await secAuth.signInWithEmailAndPassword(email,acct?.password||'');
+      await secAuth.currentUser.updatePassword(pw);
+      await secAuth.signOut();try{await secApp.delete();}catch(e){}
+    }catch(e){/* if old pw wrong, try re-create approach */}
+    await db.collection('studentAccounts').doc(student.studentNumber).update({password:pw,resetAt:firebase.firestore.FieldValue.serverTimestamp()});
+    setNewPw(pw);setAcc({...acct,password:pw});setResetting(false);};
+
+  const setAcc=v=>setAcct(v);
+
+  return(<div className="modal-bg" onClick={onClose}><div className="modal" style={{width:380}} onClick={e=>e.stopPropagation()}>
+    <h3 style={{fontSize:16,fontWeight:700,marginBottom:4}}>🔑 계정 정보</h3>
+    <p style={{color:'var(--gray-500)',fontSize:13,marginBottom:16}}>{student.name} ({student.studentNumber})</p>
+    {loading?<div style={{textAlign:'center',padding:20,color:'var(--gray-400)'}}>불러오는 중...</div>
+    :!acct?<div style={{textAlign:'center',padding:20,color:'var(--gray-400)'}}>계정 정보를 찾을 수 없습니다</div>
+    :(<>
+      <div style={{background:'var(--gray-50)',borderRadius:8,padding:14,marginBottom:14}}>
+        <div style={{fontSize:12,color:'var(--gray-500)',marginBottom:3}}>아이디 (학번)</div>
+        <div style={{fontSize:16,fontWeight:700,fontFamily:'monospace'}}>{acct.studentNumber}</div>
+      </div>
+      <div style={{background:'#f0f9ff',borderRadius:8,padding:14,marginBottom:16}}>
+        <div style={{fontSize:12,color:'var(--gray-500)',marginBottom:3}}>현재 비밀번호</div>
+        <div style={{fontSize:22,fontWeight:700,fontFamily:'monospace',letterSpacing:4,color:'#1d4ed8'}}>{newPw||acct.password||'—'}</div>
+      </div>
+      <div style={{display:'flex',gap:8}}>
+        <button onClick={reset} disabled={resetting} style={{flex:1,padding:'10px',background:'var(--warning)',color:'white',fontWeight:700,fontSize:13,borderRadius:7}}>
+          {resetting?'재발급 중...':'🔄 비밀번호 재발급'}
+        </button>
+        <button onClick={()=>{navigator.clipboard?.writeText(newPw||acct.password||'');}} style={{padding:'10px 14px',background:'var(--gray-100)',color:'var(--gray-600)',borderRadius:7}}>복사</button>
+        <button onClick={onClose} className="btn-ghost" style={{padding:'10px 14px'}}>닫기</button>
+      </div>
+    </>)}
+  </div></div>);}
+
+
 function GradeSection({grades,onChange}){
   const g=grades||defaultGrades();
   const set=(k,v)=>onChange({...g,[k]:v});
@@ -441,7 +486,7 @@ function PrintView({data,classInfo}){
     <div className="sec-title">📋 정시 지원 계획</div>
     <table className="jungsi-tbl" style={{marginBottom:8}}><thead><tr><th>군</th><th>순번</th><th>대학</th><th>모집단위(학과)</th><th>26입결</th><th>25입결</th><th>가능성</th><th>특이사항</th></tr></thead>
     <tbody>{['가','나','다'].map(gun=>jungsi.filter(e=>e.gun===gun).map((e,i)=>(<tr key={`${gun}${i}`}>{i===0&&<td className="gun-cell" rowSpan={jungsi.filter(r=>r.gun===gun).length}>{gun}군</td>}<td>{e.no}</td><td style={{fontWeight:e.univ?600:400,textAlign:'left'}}>{e.univ||'-'}</td><td style={{textAlign:'left'}}>{e.major||'-'}</td><td>{e.result2026||'-'}</td><td>{e.result2025||'-'}</td><td className={dc(e.difficulty)}>{e.difficulty||'-'}</td><td style={{textAlign:'left'}}>{e.note||'-'}</td></tr>)))}</tbody></table>
-    <div className="print-footer">인쇄일시: {new Date().toLocaleString('ko-KR')} | 양주백석고등학교 진로진학상담실</div>
+    <div className="print-footer">인쇄일시: {new Date().toLocaleString('ko-KR')} | 양주백석고 3학년부</div>
   </div>);}
 
 /* ── Student Detail ── */
@@ -502,9 +547,18 @@ function TeacherDashboard({user,onLogout}){
   const [search,setSearch]=useState('');
   const [filter,setFilter]=useState('전체');
   const [bulkModal,setBulkModal]=useState(false);
+  const [printResults,setPrintResults]=useState(null);
+  const [acctModal,setAcctModal]=useState(null);
   const [projectId,setProjectId]=useState('');
 
   useEffect(()=>{const cfg=localStorage.getItem('fbConfig');if(cfg){try{setProjectId(JSON.parse(cfg).projectId);}catch(e){}}}, []);
+
+  // 인쇄: 모달 닫힌 후 자동 실행
+  useEffect(()=>{
+    if(printResults){
+      const t=setTimeout(()=>{window.print();},300);
+      return()=>clearTimeout(t);}
+  },[printResults]);
 
   const userRef=useCallback(()=>db.collection('teachers').doc(user.uid),[user.uid]);
 
@@ -598,10 +652,13 @@ function TeacherDashboard({user,onLogout}){
               </div>))}
           </div>):(<div style={{fontSize:11,color:'var(--gray-300)',marginBottom:6,padding:'5px',textAlign:'center',background:'var(--gray-50)',borderRadius:4}}>성적 미입력</div>)}
         {s.counselingDate&&<p style={{fontSize:10,color:'var(--gray-400)'}}>📅 {s.counselingDate}</p>}
+        {s.authUid&&<button onClick={e=>{e.stopPropagation();setAcctModal(s);}} style={{marginTop:6,width:'100%',padding:'4px',background:'#ede9fe',color:'#6d28d9',fontWeight:600,fontSize:11,borderRadius:5}}>🔑 계정보기 / 비번확인</button>}
       </div>);})}
     </div>)}
 
-    {bulkModal&&<BulkAccountModal students={students} teacherUid={user.uid} projectId={projectId} cls={classInfo.clsNum} onClose={()=>setBulkModal(false)}/>}
+    {bulkModal&&<BulkAccountModal students={students} teacherUid={user.uid} projectId={projectId} cls={classInfo.clsNum} onClose={()=>setBulkModal(false)} onPrint={results=>{setPrintResults(results);}}/>}
+    {acctModal&&<AccountInfoModal student={acctModal} projectId={projectId} teacherUid={user.uid} onClose={()=>setAcctModal(null)}/>}
+    {printResults&&<CredPrintPage results={printResults} cls={classInfo.clsNum}/>}
   </div>);}
 
 /* ── Student Dashboard ── */
