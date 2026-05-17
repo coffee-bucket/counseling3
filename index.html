@@ -507,7 +507,7 @@ function PrintView({data,cls}){
     <div className="ph"><h2>2027학년도 수시·정시 지원 상담표</h2><p>3학년 {cls}반</p></div>
     <table className="info-tbl" style={{marginBottom:8}}><tbody>
       <tr><td className="lbl">번호</td><td style={{width:40}}>{data.no}</td><td className="lbl">학번</td><td style={{width:70}}>{data.studentNumber}</td><td className="lbl">이름</td><td style={{fontWeight:700,fontSize:13,width:70}}>{data.name}</td><td className="lbl">상담일자</td><td style={{width:90}}>{data.counselingDate||'—'}</td><td className="lbl">완료</td><td>{data.completed?'✅':'미완료'}</td></tr>
-      <tr><td className="lbl">수시메모</td><td colSpan="3">{data.susiMemo}</td><td className="lbl">정시메모</td><td colSpan="3">{data.jungsiMemo}</td><td className="lbl">특이사항</td><td>{data.specialNote}</td></tr>
+      <tr><td className="lbl">수시 상담 메모</td><td colSpan="3">{data.susiMemo}</td><td className="lbl">정시 상담 메모</td><td colSpan="3">{data.jungsiMemo}</td><td className="lbl">상담 특이사항</td><td>{data.specialNote}</td></tr>
     </tbody></table>
     <div className="sec-title">📊 내신 및 수능 성적</div>
     <table className="grade-tbl" style={{marginBottom:8}}><thead><tr><th>전교과</th><th>국수영사</th><th>국수영과</th><th>탐구평균</th></tr></thead>
@@ -526,9 +526,31 @@ function PrintView({data,cls}){
 /* ── Student Detail ── */
 function StudentDetail({student,onSave,onBack,cls,isTeacher}){
   const [data,setData]=useState(student);const [saving,setSaving]=useState(false);const [status,setStatus]=useState('idle');
+  const [counselReq,setCounselReq]=useState(null);const [counselSlot,setCounselSlot]=useState(null);const [recordText,setRecordText]=useState('');const [recordSaving,setRecordSaving]=useState(false);
   useEffect(()=>{setData(student);setStatus('idle');},[student.studentNumber]);
+  useEffect(()=>{
+    if(!isTeacher||!cls||!student.studentNumber)return;
+    const unsub=clsRef(cls).collection('requests').doc(student.studentNumber).onSnapshot(async doc=>{
+      const req=doc.exists?doc.data():null;setCounselReq(req);
+      if(req?.confirmedSlotId){
+        const slotDoc=await clsRef(cls).collection('slots').doc(req.confirmedSlotId).get();
+        setCounselSlot(slotDoc.exists?{id:slotDoc.id,...slotDoc.data()}:null);
+      }else setCounselSlot(null);
+    });
+    return()=>unsub();
+  },[isTeacher,cls,student.studentNumber]);
   const update=(k,v)=>setData(p=>({...p,[k]:v}));
   const handleSave=async()=>{setSaving(true);setStatus('saving');try{await onSave(data);setStatus('saved');setTimeout(()=>setStatus('idle'),2500);}catch(e){setStatus('error');alert('저장 실패: '+e.message);}finally{setSaving(false);}};
+  const toggleCompleted=async()=>{const next={...data,completed:!data.completed};setData(next);try{await onSave(next);}catch(e){alert('상담 완료 저장 실패: '+e.message);}};
+  const saveCounselRecord=async()=>{
+    if(!recordText.trim()){alert('상담 내용을 입력하세요.');return;}
+    const record={id:uid(),date:counselSlot?.date||data.counselingDate||'',round:counselReq?.round||data.counselingRound||1,content:recordText.trim(),savedAt:new Date().toISOString()};
+    const next={...data,counselingDate:record.date,counselingRound:record.round,counselingRecords:[record,...(data.counselingRecords||[])]};
+    setRecordSaving(true);
+    try{await onSave(next);setData(next);setRecordText('');}
+    catch(e){alert('상담 내용 저장 실패: '+e.message);}
+    finally{setRecordSaving(false);}
+  };
   const updateSusi=(idx,e)=>setData(d=>{const l=[...d.susiList];l[idx]=e;return{...d,susiList:l};});
   const deleteSusi=idx=>setData(d=>({...d,susiList:d.susiList.filter((_,i)=>i!==idx)}));
   const addSusi=()=>setData(d=>({...d,susiList:[...(d.susiList||[]),defSusi()]}));
@@ -539,6 +561,7 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
       <div><span style={{fontSize:15,fontWeight:700}}>{data.name||'이름 없음'}</span><span style={{fontSize:12,color:'var(--gray-500)',marginLeft:8}}>학번 {data.studentNumber}</span></div>
       <div style={{marginLeft:'auto',display:'flex',gap:8}}>
         {isTeacher&&<button onClick={()=>window.print()} className="btn-teal">🖨️ 인쇄</button>}
+        {isTeacher&&<button onClick={toggleCompleted} style={{fontWeight:700,padding:'7px 14px',fontSize:13,borderRadius:6,background:data.completed?'#dcfce7':'var(--success)',color:data.completed?'#15803d':'white'}}>{data.completed?'상담 완료됨':'상담 완료'}</button>}
         <button onClick={handleSave} disabled={saving} style={{fontWeight:700,padding:'7px 22px',fontSize:13,borderRadius:6,background:btnCfg.bg,color:'white'}}>{btnCfg.label}</button>
       </div>
     </div>
@@ -549,13 +572,24 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
         <div><div className="field-label">학번</div><input value={data.studentNumber||''} readOnly style={{width:90,background:'var(--gray-50)'}}/></div>
         <div><div className="field-label">이름</div><input value={data.name||''} readOnly style={{width:90,background:'var(--gray-50)'}}/></div>
         {isTeacher&&<><div><div className="field-label">상담일자</div><input type="date" value={data.counselingDate||''} onChange={e=>update('counselingDate',e.target.value)}/></div>
-        <label style={{display:'flex',alignItems:'center',gap:5,fontSize:12,fontWeight:600,color:data.completed?'var(--success)':'var(--gray-500)',cursor:'pointer',alignSelf:'flex-end',paddingBottom:5}}>
-          <input type="checkbox" checked={!!data.completed} onChange={e=>update('completed',e.target.checked)}/>상담 완료</label>
-        <div style={{flex:1,minWidth:120}}><div className="field-label">수시 메모</div><input value={data.susiMemo||''} onChange={e=>update('susiMemo',e.target.value)} style={{width:'100%'}}/></div>
-        <div style={{flex:1,minWidth:120}}><div className="field-label">정시 메모</div><input value={data.jungsiMemo||''} onChange={e=>update('jungsiMemo',e.target.value)} style={{width:'100%'}}/></div>
-        <div style={{flex:1.5,minWidth:140}}><div className="field-label">특이사항</div><input value={data.specialNote||''} onChange={e=>update('specialNote',e.target.value)} style={{width:'100%'}}/></div></>}
+        <div style={{flex:1,minWidth:120}}><div className="field-label">수시 상담 메모</div><input value={data.susiMemo||''} onChange={e=>update('susiMemo',e.target.value)} style={{width:'100%'}}/></div>
+        <div style={{flex:1,minWidth:120}}><div className="field-label">정시 상담 메모</div><input value={data.jungsiMemo||''} onChange={e=>update('jungsiMemo',e.target.value)} style={{width:'100%'}}/></div>
+        <div style={{flex:1.5,minWidth:140}}><div className="field-label">상담 특이사항</div><input value={data.specialNote||''} onChange={e=>update('specialNote',e.target.value)} style={{width:'100%'}}/></div></>}
         {!isTeacher&&<div style={{flex:1,minWidth:200}}><div className="field-label">메모 (궁금한 점 등)</div><input value={data.studentNote||''} onChange={e=>update('studentNote',e.target.value)} style={{width:'100%'}}/></div>}
       </div>
+      {isTeacher&&<div className="section-box">
+        <div className="section-title">상담 누적 기록</div>
+        <div style={{display:'grid',gridTemplateColumns:'150px 100px 1fr auto',gap:8,alignItems:'end',marginBottom:10}}>
+          <div><div className="field-label">확정 상담일자</div><input value={counselSlot?.date||data.counselingDate||''} readOnly style={{width:'100%',background:'var(--gray-50)'}}/></div>
+          <div><div className="field-label">회차</div><input value={`${counselReq?.round||data.counselingRound||1}회차`} readOnly style={{width:'100%',background:'var(--gray-50)',textAlign:'center',fontWeight:700}}/></div>
+          <div><div className="field-label">상담 내용</div><input value={recordText} onChange={e=>setRecordText(e.target.value)} placeholder="상담 내용을 입력하세요" style={{width:'100%'}}/></div>
+          <button onClick={saveCounselRecord} disabled={recordSaving} style={{background:'var(--primary)',color:'white',fontWeight:700,padding:'7px 14px',borderRadius:6}}>{recordSaving?'저장 중...':'상담 내용 저장'}</button>
+        </div>
+        {(data.counselingRecords||[]).length===0?<div style={{fontSize:12,color:'var(--gray-400)',textAlign:'center',padding:'12px',background:'var(--gray-50)',borderRadius:6}}>저장된 상담 기록이 없습니다</div>:
+          <div style={{display:'grid',gap:6}}>{(data.counselingRecords||[]).map(r=><div key={r.id} style={{display:'grid',gridTemplateColumns:'120px 70px 1fr',gap:8,alignItems:'center',padding:'7px 9px',background:'var(--gray-50)',border:'1px solid var(--gray-100)',borderRadius:6}}>
+            <span style={{fontWeight:700,color:'var(--gray-600)'}}>{r.date||'-'}</span><span className="badge badge-blue">{r.round||1}회차</span><span style={{color:'var(--gray-700)'}}>{r.content}</span>
+          </div>)}</div>}
+      </div>}
       {!isTeacher&&cls&&<ScheduleSection studentNumber={data.studentNumber} studentName={data.name} cls={cls}/>}
       <GradeSection grades={data.grades} onChange={g=>setData(d=>({...d,grades:g}))}/>
       <div className="section-box">
