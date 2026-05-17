@@ -42,7 +42,7 @@ button:hover{opacity:.88;} button:disabled{opacity:.5;cursor:not-allowed;}
 .student-card:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,.1);}
 .student-card.completed{border-color:#a7f3d0;border-width:2px;}
 .badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700;}
-.badge-green{background:#dcfce7;color:#15803d;} .badge-blue{background:#dbeafe;color:#1d4ed8;} .badge-gray{background:var(--gray-100);color:var(--gray-400);}
+.badge-green{background:#dcfce7;color:#15803d;} .badge-blue{background:#dbeafe;color:#1d4ed8;} .badge-gray{background:var(--gray-100);color:var(--gray-400);} .badge-red{background:#fee2e2;color:#dc2626;}
 
 .detail-header{background:white;border-bottom:1px solid var(--gray-200);padding:10px 20px;position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:10px;}
 .section-box{background:white;border-radius:10px;padding:14px 16px;border:1px solid var(--gray-200);margin-bottom:10px;}
@@ -696,7 +696,8 @@ function ScheduleSection({studentNumber,studentName,cls}){
             {place(s)&&<span style={{fontSize:11,color:'var(--gray-400)',marginLeft:6}}>{place(s)}</span>}
           </div>
           {isMine&&<span className={`badge ${isConf?'badge-green':'badge-blue'}`}>{isConf?'확정':'신청 완료'}</span>}
-          {isClosed&&<span className="badge badge-gray">마감</span>}
+          {isClosed&&<span className="badge badge-red">마감</span>}
+          {!isMine&&!isClosed&&<span className="badge badge-green">신청가능</span>}
         </div>);})}
     </div>
     <div style={{marginBottom:10}}><div className="field-label">메모 (선생님께 전달할 말)</div>
