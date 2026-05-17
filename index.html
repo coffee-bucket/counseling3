@@ -412,7 +412,7 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
   const btnCfg={idle:{label:'💾 저장',bg:'#3b82f6'},saving:{label:'저장 중...',bg:'#94a3b8'},saved:{label:'✓ 저장 완료',bg:'#10b981'},error:{label:'⚠ 실패',bg:'#ef4444'}}[status];
   return(<div style={{minHeight:'100vh',background:'var(--gray-50)'}}>
     <div className="detail-header no-print">
-      <button className="btn-ghost" onClick={onBack}>← 목록으로</button>
+      {isTeacher&&<button className="btn-ghost" onClick={onBack}>← 목록으로</button>}
       <div><span style={{fontSize:15,fontWeight:700}}>{data.name||'이름 없음'}</span><span style={{fontSize:12,color:'var(--gray-500)',marginLeft:8}}>학번 {data.studentNumber}</span></div>
       <div style={{marginLeft:'auto',display:'flex',gap:8}}>
         {isTeacher&&<button onClick={()=>window.print()} className="btn-teal">🖨️ 인쇄</button>}
@@ -562,6 +562,7 @@ function ScheduleModal({cls,onClose}){
                 {place(s)&&<span style={{fontSize:11,color:'var(--gray-400)',width:100}}>{place(s)}</span>}
                 {s.confirmedFor?(
                   <><span className={`badge ${reqStatus==='confirmed'?'badge-green':'badge-blue'}`}>{s.confirmedFor} {reqStatus==='confirmed'?'확정':'신청 마감'}</span>
+                  {requests[s.confirmedFor]?.studentNote&&<span style={{fontSize:11,color:'var(--gray-500)',flex:1,minWidth:120}}>메모: {requests[s.confirmedFor].studentNote}</span>}
                   {reqStatus!=='confirmed'&&<button onClick={()=>confirmSlot(s.id,s.confirmedFor)} style={{marginLeft:'auto',background:'var(--success)',color:'white',padding:'3px 10px',fontSize:11,borderRadius:5,fontWeight:600}}>확정</button>}
                   <button onClick={()=>unconfirm(s.id,s.confirmedFor)} style={{background:'none',color:'var(--gray-400)',fontSize:11,marginLeft:reqStatus==='confirmed'?'auto':'4px'}}>취소</button></>
                 ):(
@@ -594,7 +595,7 @@ function ScheduleModal({cls,onClose}){
       {tab==='confirmed'&&(confirmed.length===0?<div className="empty-state" style={{padding:30}}>확정된 일정이 없습니다</div>:
         <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
           <thead><tr style={{background:'var(--gray-50)'}}>
-            {['날짜','교시','학생','장소'].map(h=><th key={h} style={{padding:'6px 10px',textAlign:'left',border:'1px solid var(--gray-200)',fontWeight:600}}>{h}</th>)}
+            {['날짜','교시','학생','장소','메모'].map(h=><th key={h} style={{padding:'6px 10px',textAlign:'left',border:'1px solid var(--gray-200)',fontWeight:600}}>{h}</th>)}
           </tr></thead>
           <tbody>{confirmed.map(s=>{const req=requests[s.confirmedFor];return(
             <tr key={s.id}>
@@ -602,6 +603,7 @@ function ScheduleModal({cls,onClose}){
               <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',fontWeight:600}}>{slotLabel(s)}</td>
               <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)'}}>{req?.name||s.confirmedFor}</td>
               <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',color:'var(--gray-500)'}}>{place(s)}</td>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',color:'var(--gray-500)'}}>{req?.studentNote||'-'}</td>
             </tr>);})}</tbody>
         </table>)}
     </div>
@@ -658,7 +660,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
   };
 
   const confirmedSlot=myReq?.confirmedSlotId?slots.find(s=>s.id===myReq.confirmedSlotId):null;
-  const available=slots.filter(s=>!s.confirmedFor||s.confirmedFor===studentNumber);
+  const visibleSlots=slots;
   const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`};
   const periodTimes={0:'08:00~08:50',8:'17:00~17:50',9:'18:00~18:50',10:'19:00~19:50',11:'20:00~20:50',12:'21:00~21:50'};
   const periodNum=s=>s.period!==undefined&&s.period!==''?Number(s.period):s.startTime?.match(/^\d{2}교시$/)?Number(s.startTime.slice(0,2)):null;
@@ -680,12 +682,12 @@ function ScheduleSection({studentNumber,studentName,cls}){
       </div>)}
     <p style={{fontSize:12,color:'var(--gray-600)',marginBottom:10}}>희망하는 상담 일정을 1개 선택하세요. 신청하면 해당 일정은 선착순 마감됩니다.</p>
     <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:12}}>
-      {available.map((s,i)=>{
-        const isSel=selected.includes(s.id);const isConf=s.confirmedFor===studentNumber;const rank=selected.indexOf(s.id)+1;
-        return(<div key={s.id} onClick={()=>!isConf&&toggle(s.id)}
-          style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderRadius:7,cursor:isConf?'default':'pointer',
-            background:isConf?'#f0fdf4':isSel?'#eff6ff':'var(--gray-50)',border:`1px solid ${isConf?'#a7f3d0':isSel?'#93c5fd':'var(--gray-200)'}`,transition:'all .15s'}}>
-          <div style={{width:22,height:22,borderRadius:'50%',border:`2px solid ${isSel||isConf?'var(--primary)':'var(--gray-300)'}`,background:isSel?'var(--primary)':isConf?'var(--success)':'white',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+      {visibleSlots.map((s,i)=>{
+        const isSel=selected.includes(s.id);const isMine=s.confirmedFor===studentNumber;const isClosed=!!s.confirmedFor&&!isMine;const isConf=isMine&&myReq?.status==='confirmed';
+        return(<div key={s.id} onClick={()=>!isMine&&!isClosed&&toggle(s.id)}
+          style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderRadius:7,cursor:isMine||isClosed?'default':'pointer',opacity:isClosed?0.75:1,
+            background:isMine?'#f0fdf4':isClosed?'#f8fafc':isSel?'#eff6ff':'var(--gray-50)',border:`1px solid ${isMine?'#a7f3d0':isClosed?'var(--gray-200)':isSel?'#93c5fd':'var(--gray-200)'}`,transition:'all .15s'}}>
+          <div style={{width:22,height:22,borderRadius:'50%',border:`2px solid ${isSel||isMine?'var(--primary)':'var(--gray-300)'}`,background:isSel?'var(--primary)':isMine?'var(--success)':isClosed?'var(--gray-200)':'white',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
             {isConf?<span style={{fontSize:12,color:'white'}}>✓</span>:isSel?<span style={{fontSize:11,color:'white',fontWeight:700}}>1</span>:null}
           </div>
           <div style={{flex:1}}>
@@ -693,7 +695,8 @@ function ScheduleSection({studentNumber,studentName,cls}){
             <span style={{fontSize:11,color:'var(--gray-400)',marginLeft:8}}>{dayLabel(s.date)}</span>
             {place(s)&&<span style={{fontSize:11,color:'var(--gray-400)',marginLeft:6}}>{place(s)}</span>}
           </div>
-          {isConf&&<span className="badge badge-green">확정</span>}
+          {isMine&&<span className={`badge ${isConf?'badge-green':'badge-blue'}`}>{isConf?'확정':'신청 완료'}</span>}
+          {isClosed&&<span className="badge badge-gray">마감</span>}
         </div>);})}
     </div>
     <div style={{marginBottom:10}}><div className="field-label">메모 (선생님께 전달할 말)</div>
