@@ -295,7 +295,7 @@ function GradeSection({grades,onChange}){
   const setMock=(exam,subj,key,v)=>onChange({...g,mockScores:{...(g.mockScores||{}),[exam]:{...((g.mockScores||{})[exam]||{}),[subj]:{...(((g.mockScores||{})[exam]||{})[subj]||{}),[key]:v}}}});
   const renderGI=(field,label)=>(<div key={field} style={{flex:1,minWidth:60}}><div className="mini-label">{label}</div><input value={g[field]||''} onChange={e=>set(field,e.target.value)} style={{width:'100%',textAlign:'center',background:'#fef9c3',fontWeight:700,fontSize:15,padding:'5px 2px'}}/></div>);
   const renderMI=(exam,subj,label)=>{const v=g.mockScores?.[exam]?.[subj]||{};const hasName=namedSubjects.has(subj);return(<div key={subj} style={{minWidth:hasName?162:118}}>
-    <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:2}}>
+    <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:2,minHeight:29}}>
       <div className="mini-label" style={{textAlign:'left',paddingLeft:2,fontWeight:700,color:'var(--gray-500)',marginBottom:0,flexShrink:0}}>{label}</div>
       {hasName&&<input value={v.name||''} onChange={e=>setMock(exam,subj,'name',e.target.value)} placeholder="과목명" style={{flex:1,minWidth:0,fontSize:11,padding:'3px 5px',borderRadius:4}}/>}
     </div>
@@ -355,9 +355,16 @@ function SusiEntryRow({entry,onChange,onDelete}){
 
 /* ── Jungsi Section ── */
 function JungsiSection({jungsiList,onChange}){
+  const [collapsed,setCollapsed]=useState(true);
   const update=(idx,e)=>{const n=[...jungsiList];n[idx]=e;onChange(n);};
-  return(<div className="section-box"><div className="section-title">📋 정시 지원 계획</div>
-    {['가','나','다'].map(gun=>(<div key={gun} style={{marginBottom:14}}><div className="gun-header">{gun}군</div>
+  return(<div className="section-box">
+    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:10,marginBottom:collapsed?0:10}}>
+      <div className="section-title" style={{marginBottom:0}}>📋 정시 지원 계획</div>
+      <button type="button" onClick={()=>setCollapsed(v=>!v)} className="btn-ghost" style={{padding:'5px 10px',fontSize:12,fontWeight:700}}>
+        {collapsed?'펼치기':'접기'}
+      </button>
+    </div>
+    {!collapsed&&['가','나','다'].map(gun=>(<div key={gun} style={{marginBottom:14}}><div className="gun-header">{gun}군</div>
       {jungsiList.map((e,idx)=>e.gun!==gun?null:(<div key={e.id} className="jungsi-row">
         <span style={{fontSize:11,color:'var(--gray-400)',width:16,flexShrink:0,fontWeight:600}}>{e.no}</span>
         <input value={e.univ||''} onChange={ev=>update(idx,{...e,univ:ev.target.value})} placeholder="대학명" style={{flex:1.2,minWidth:80}}/>
@@ -448,9 +455,13 @@ function ScheduleModal({cls,onClose}){
   const [requests,setRequests]=useState({});
   const [date,setDate]=useState('');const [period,setPeriod]=useState('');const [location,setLocation]=useState(DEFAULT_LOCATION);
   const [adding,setAdding]=useState(false);const [tab,setTab]=useState('slots');
+  const sortSlots=list=>list.sort((a,b)=>`${a.date||''} ${a.startTime||''}`.localeCompare(`${b.date||''} ${b.startTime||''}`));
+  const refreshSlots=async()=>{
+    const snap=await clsRef(cls).collection('slots').get();
+    setSlots(sortSlots(snap.docs.map(d=>({id:d.id,...d.data()}))));
+  };
 
   useEffect(()=>{
-    const sortSlots=list=>list.sort((a,b)=>`${a.date||''} ${a.startTime||''}`.localeCompare(`${b.date||''} ${b.startTime||''}`));
     const unsub=clsRef(cls).collection('slots')
       .onSnapshot(snap=>setSlots(sortSlots(snap.docs.map(d=>({id:d.id,...d.data()})))),err=>{console.error(err);alert('상담 일정 불러오기 실패: '+(err.message||err));});
     const unsub2=clsRef(cls).collection('requests')
@@ -463,18 +474,18 @@ function ScheduleModal({cls,onClose}){
     setAdding(true);
     try{
       const placeText=(location||DEFAULT_LOCATION).trim();
-      await clsRef(cls).collection('slots').add({
+      const slotData={
         date,
-        period:Number(period),
         startTime:`${String(period).padStart(2,'0')}교시`,
         endTime:'',
-        location:placeText,
         note:placeText,
-        status:'open',
         confirmedFor:'',
-        createdAt:firebase.firestore.FieldValue.serverTimestamp(),
-        updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-      });
+        createdAt:firebase.firestore.FieldValue.serverTimestamp()
+      };
+      const docRef=await clsRef(cls).collection('slots').add(slotData);
+      setSlots(prev=>sortSlots([...prev,{...slotData,id:docRef.id,createdAt:null}]));
+      await refreshSlots();
+      setTab('slots');
       setPeriod('');setLocation(DEFAULT_LOCATION);
     }catch(e){
       console.error(e);alert('상담 일정 추가 실패: '+(e.message||e));
@@ -491,7 +502,7 @@ function ScheduleModal({cls,onClose}){
     try{
       const req=requests[studentNum]||{};
       const batch=db.batch();
-      batch.update(clsRef(cls).collection('slots').doc(slotId),{confirmedFor:studentNum,status:'confirmed',updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      batch.update(clsRef(cls).collection('slots').doc(slotId),{confirmedFor:studentNum});
       batch.set(clsRef(cls).collection('requests').doc(studentNum),{...req,studentNumber:studentNum,confirmedSlotId:slotId,status:'confirmed',confirmedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
       await batch.commit();
     }catch(e){console.error(e);alert('상담 일정 확정 실패: '+(e.message||e));}
@@ -500,7 +511,7 @@ function ScheduleModal({cls,onClose}){
   const unconfirm=async(slotId,studentNum)=>{
     try{
       const batch=db.batch();
-      batch.update(clsRef(cls).collection('slots').doc(slotId),{confirmedFor:'',status:'open',updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      batch.update(clsRef(cls).collection('slots').doc(slotId),{confirmedFor:''});
       batch.set(clsRef(cls).collection('requests').doc(studentNum),{confirmedSlotId:'',status:'pending',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
       await batch.commit();
     }catch(e){console.error(e);alert('상담 일정 확정 취소 실패: '+(e.message||e));}
@@ -531,12 +542,12 @@ function ScheduleModal({cls,onClose}){
 
     {/* 탭 */}
     <div style={{display:'flex',gap:6,marginBottom:12}}>
-      {[['slots',`전체 슬롯 (${slots.length})`],['pending',`신청 대기 (${pending.length})`],['confirmed',`확정 (${confirmed.length})`]].map(([k,l])=>(
+      {[['slots',`전체 일정 (${slots.length})`],['pending',`신청 대기 (${pending.length})`],['confirmed',`확정 (${confirmed.length})`]].map(([k,l])=>(
         <button key={k} className={`tab ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{l}</button>))}
     </div>
 
     <div style={{overflowY:'auto',maxHeight:'45vh'}}>
-      {tab==='slots'&&(Object.keys(byDate).length===0?<div className="empty-state" style={{padding:30}}>등록된 슬롯이 없습니다</div>:
+      {tab==='slots'&&(Object.keys(byDate).length===0?<div className="empty-state" style={{padding:30}}>등록된 일정이 없습니다</div>:
         Object.entries(byDate).map(([d,daySlots])=>(
           <div key={d} style={{marginBottom:14}}>
             <div style={{fontWeight:700,fontSize:12,color:'var(--primary)',marginBottom:6,padding:'3px 8px',background:'#eef2ff',borderRadius:5,display:'inline-block'}}>{dayLabel(d)}</div>
@@ -625,7 +636,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
   };
 
   const confirmedSlot=myReq?.confirmedSlotId?slots.find(s=>s.id===myReq.confirmedSlotId):null;
-  const available=slots.filter(s=>(s.status!=='confirmed'&&!s.confirmedFor)||s.confirmedFor===studentNumber);
+  const available=slots.filter(s=>!s.confirmedFor||s.confirmedFor===studentNumber);
   const dayLabel=d=>{const days=['일','월','화','수','목','금','토'];const dt=new Date(d);return `${d} (${days[dt.getDay()]})`};
   const slotLabel=s=>s.period?`${Number(s.period)}교시`:s.startTime?.match(/^\d{2}교시$/)?`${Number(s.startTime.slice(0,2))}교시`:`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;
   const place=s=>s.location||s.note||'';
@@ -661,7 +672,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
         </div>);})}
     </div>
     <div style={{marginBottom:10}}><div className="field-label">메모 (선생님께 전달할 말)</div>
-      <input value={memo} onChange={e=>setMemo(e.target.value)} placeholder="예) 방과후 시간은 어렵습니다" style={{width:'100%'}}/></div>
+      <input value={memo} onChange={e=>setMemo(e.target.value)} placeholder="예) 제 등급으로 갈 수 있는 대학이 궁금해요" style={{width:'100%'}}/></div>
     <button onClick={submit} disabled={saving||selected.length===0} style={{width:'100%',padding:'10px',background:selected.length>0?'var(--primary)':'var(--gray-200)',color:selected.length>0?'white':'var(--gray-400)',fontWeight:700,borderRadius:7,fontSize:13}}>
       {saving?'신청 중...':`${selected.length}개 일정 신청하기`}
     </button>
@@ -677,7 +688,7 @@ function TeacherDashboard({user,onLogout}){
   const [acctModal,setAcctModal]=useState(null);
   const [scheduleModal,setScheduleModal]=useState(false);
   const [projectId,setProjectId]=useState('');
-  const [teacherName,setTeacherName]=useState('');
+  const teacherName=user.displayName||user.email||'선생님';
 
   useEffect(()=>{
     const cfg=localStorage.getItem('fbConfig');if(cfg){try{setProjectId(JSON.parse(cfg).projectId);}catch(e){}}
@@ -764,7 +775,7 @@ function TeacherDashboard({user,onLogout}){
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
         <h1 style={{fontSize:18,fontWeight:700}}>🎓 수시·정시 상담 관리 <span style={{fontSize:12,opacity:.7}}>선생님</span></h1>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <input value={teacherName} onChange={e=>setTeacherName(e.target.value)} placeholder="이름 입력" style={{width:90,background:'rgba(255,255,255,.2)',border:'1px solid rgba(255,255,255,.3)',color:'white',padding:'4px 8px',borderRadius:5,fontSize:12}}/>
+          <span style={{fontSize:12,fontWeight:700,background:'rgba(255,255,255,.18)',border:'1px solid rgba(255,255,255,.25)',padding:'5px 10px',borderRadius:6}}>{teacherName}</span>
           <span style={{fontSize:12,opacity:.75}}>{user.email}</span>
           <button onClick={onLogout} style={{background:'rgba(255,255,255,.2)',color:'white',padding:'5px 12px',fontSize:12}}>로그아웃</button>
         </div>
