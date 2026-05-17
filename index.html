@@ -494,7 +494,30 @@ function ScheduleModal({cls,onClose}){
 
   const deleteSlot=async id=>{
     if(!window.confirm('삭제하시겠습니까?'))return;
-    try{await clsRef(cls).collection('slots').doc(id).delete();}
+    try{
+      const batch=db.batch();
+      batch.delete(clsRef(cls).collection('slots').doc(id));
+      Object.entries(requests).forEach(([studentNum,req])=>{
+        const requested=(req.requestedSlots||[]).filter(sid=>sid!==id);
+        const patch={updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+        if((req.requestedSlots||[]).includes(id))patch.requestedSlots=requested;
+        if(req.confirmedSlotId===id){patch.confirmedSlotId='';patch.status=requested.length>0?'pending':'completed';}
+        if(req.lastCompletedSlotId===id)patch.lastCompletedSlotId='';
+        if(Object.keys(patch).length>1)batch.set(clsRef(cls).collection('requests').doc(studentNum),patch,{merge:true});
+      });
+      await batch.commit();
+      setSlots(prev=>prev.filter(s=>s.id!==id));
+      setRequests(prev=>{
+        const next={...prev};
+        Object.entries(next).forEach(([studentNum,req])=>{
+          const requested=(req.requestedSlots||[]).filter(sid=>sid!==id);
+          if((req.requestedSlots||[]).includes(id)||req.confirmedSlotId===id||req.lastCompletedSlotId===id){
+            next[studentNum]={...req,requestedSlots:requested,confirmedSlotId:req.confirmedSlotId===id?'':req.confirmedSlotId,lastCompletedSlotId:req.lastCompletedSlotId===id?'':req.lastCompletedSlotId};
+          }
+        });
+        return next;
+      });
+    }
     catch(e){console.error(e);alert('상담 일정 삭제 실패: '+(e.message||e));}
   };
 
@@ -503,9 +526,20 @@ function ScheduleModal({cls,onClose}){
       const req=requests[studentNum]||{};
       const batch=db.batch();
       batch.update(clsRef(cls).collection('slots').doc(slotId),{confirmedFor:studentNum});
-      batch.set(clsRef(cls).collection('requests').doc(studentNum),{...req,studentNumber:studentNum,confirmedSlotId:slotId,status:'confirmed',confirmedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+      batch.set(clsRef(cls).collection('requests').doc(studentNum),{...req,studentNumber:studentNum,round:req.round||1,confirmedSlotId:slotId,status:'confirmed',confirmedAt:firebase.firestore.FieldValue.serverTimestamp(),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
       await batch.commit();
     }catch(e){console.error(e);alert('상담 일정 확정 실패: '+(e.message||e));}
+  };
+
+  const completeSlot=async(slotId,studentNum)=>{
+    if(!window.confirm('이 상담을 완료 처리하고 학생이 다음 회차를 신청할 수 있게 할까요?'))return;
+    try{
+      const req=requests[studentNum]||{};const round=req.round||1;
+      const batch=db.batch();
+      batch.update(clsRef(cls).collection('slots').doc(slotId),{confirmedFor:'',completedFor:studentNum,completedRound:round,completedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      batch.set(clsRef(cls).collection('requests').doc(studentNum),{...req,status:'completed',confirmedSlotId:'',requestedSlots:[],lastCompletedSlotId:slotId,lastCompletedRound:round,round:round+1,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+      await batch.commit();
+    }catch(e){console.error(e);alert('상담 완료 처리 실패: '+(e.message||e));}
   };
 
   const unconfirm=async(slotId,studentNum)=>{
@@ -528,6 +562,7 @@ function ScheduleModal({cls,onClose}){
   const periodLabel=n=>periodTimes[n]?`${n}교시 (${periodTimes[n]})`:`${n}교시`;
   const slotLabel=s=>{const n=periodNum(s);return n!==null?periodLabel(n):`${s.startTime||''}${s.endTime?`~${s.endTime}`:''}`;};
   const place=s=>s.location||s.note||'';
+  const studentLabel=(sNum,roundOverride)=>{const req=requests[sNum]||{};const round=roundOverride||req.round||1;return `${sNum}${req.name?` ${req.name}`:''} (${round}회차)`;};
 
   return(<div className="modal-bg" onClick={onClose}><div className="modal" style={{width:620,maxHeight:'85vh'}} onClick={e=>e.stopPropagation()}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
@@ -557,14 +592,19 @@ function ScheduleModal({cls,onClose}){
             {daySlots.map(s=>{
               const req=Object.entries(requests).filter(([k,v])=>v.requestedSlots?.includes(s.id));
               const reqStatus=s.confirmedFor&&requests[s.confirmedFor]?.status;
-              return(<div key={s.id} style={{display:'flex',gap:8,alignItems:'center',padding:'6px 10px',background:s.confirmedFor?'#f0fdf4':'white',border:`1px solid ${s.confirmedFor?'#a7f3d0':'var(--gray-200)'}`,borderRadius:7,marginBottom:4}}>
+              const doneReq=s.completedFor&&requests[s.completedFor];
+              return(<div key={s.id} style={{display:'flex',gap:8,alignItems:'center',padding:'6px 10px',background:s.confirmedFor?'#f0fdf4':s.completedFor?'#f8fafc':'white',border:`1px solid ${s.confirmedFor?'#a7f3d0':s.completedFor?'var(--gray-200)':'var(--gray-200)'}`,borderRadius:7,marginBottom:4}}>
                 <span style={{fontWeight:600,fontSize:13,width:150,flexShrink:0}}>{slotLabel(s)}</span>
                 {place(s)&&<span style={{fontSize:11,color:'var(--gray-400)',width:100}}>{place(s)}</span>}
                 {s.confirmedFor?(
-                  <><span className={`badge ${reqStatus==='confirmed'?'badge-green':'badge-blue'}`}>{s.confirmedFor} {reqStatus==='confirmed'?'확정':'신청 마감'}</span>
+                  <><span className={`badge ${reqStatus==='confirmed'?'badge-green':'badge-blue'}`}>{studentLabel(s.confirmedFor)} {reqStatus==='confirmed'?'확정':'신청 마감'}</span>
                   {requests[s.confirmedFor]?.studentNote&&<span style={{fontSize:11,color:'var(--gray-500)',flex:1,minWidth:120}}>메모: {requests[s.confirmedFor].studentNote}</span>}
                   {reqStatus!=='confirmed'&&<button onClick={()=>confirmSlot(s.id,s.confirmedFor)} style={{marginLeft:'auto',background:'var(--success)',color:'white',padding:'3px 10px',fontSize:11,borderRadius:5,fontWeight:600}}>확정</button>}
-                  <button onClick={()=>unconfirm(s.id,s.confirmedFor)} style={{background:'none',color:'var(--gray-400)',fontSize:11,marginLeft:reqStatus==='confirmed'?'auto':'4px'}}>취소</button></>
+                  {reqStatus==='confirmed'&&<button onClick={()=>completeSlot(s.id,s.confirmedFor)} style={{marginLeft:'auto',background:'var(--primary)',color:'white',padding:'3px 10px',fontSize:11,borderRadius:5,fontWeight:600}}>상담 완료</button>}
+                  <button onClick={()=>unconfirm(s.id,s.confirmedFor)} style={{background:'none',color:'var(--gray-400)',fontSize:11,marginLeft:reqStatus==='confirmed'?'4px':'4px'}}>취소</button></>
+                ):s.completedFor?(
+                  <><span className="badge badge-gray">{studentLabel(s.completedFor,s.completedRound)} 상담 완료</span>
+                  {doneReq?.studentNote&&<span style={{fontSize:11,color:'var(--gray-500)',flex:1,minWidth:120}}>메모: {doneReq.studentNote}</span>}</>
                 ):(
                   <><span style={{fontSize:11,color:'var(--gray-500)'}}>신청 {req.length}명 {req.length>0&&`(${req.slice(0,3).map(([k,v])=>v.name||k).join(', ')}${req.length>3?'...':''})`}</span>
                   {req.length>0&&(<select onChange={e=>{if(e.target.value)confirmSlot(s.id,e.target.value);}} style={{marginLeft:'auto',width:120,fontSize:11}} defaultValue="">
@@ -601,7 +641,7 @@ function ScheduleModal({cls,onClose}){
             <tr key={s.id}>
               <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)'}}>{dayLabel(s.date)}</td>
               <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',fontWeight:600}}>{slotLabel(s)}</td>
-              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)'}}>{req?.name||s.confirmedFor}</td>
+              <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)'}}>{studentLabel(s.confirmedFor)}</td>
               <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',color:'var(--gray-500)'}}>{place(s)}</td>
               <td style={{padding:'6px 10px',border:'1px solid var(--gray-200)',color:'var(--gray-500)'}}>{req?.studentNote||'-'}</td>
             </tr>);})}</tbody>
@@ -641,6 +681,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
         if(!slotDoc.exists)throw new Error('선택한 일정이 삭제되었습니다.');
         const slotData=slotDoc.data();
         if(slotData.confirmedFor&&slotData.confirmedFor!==studentNumber)throw new Error('이미 다른 학생이 신청한 일정입니다.');
+        if(slotData.completedFor)throw new Error('이미 상담이 완료된 일정입니다.');
         tx.update(slotRef,{confirmedFor:studentNumber});
         prevSlotDocs.forEach(doc=>{if(doc.exists&&doc.data().confirmedFor===studentNumber)tx.update(doc.ref,{confirmedFor:''});});
         tx.set(requestRef,{
@@ -650,6 +691,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
           studentNote:memo,
           status:prevReq.status==='confirmed'?'confirmed':'pending',
           confirmedSlotId:prevReq.status==='confirmed'?prevReq.confirmedSlotId:'',
+          round:prevReq.round||1,
           updatedAt:firebase.firestore.FieldValue.serverTimestamp()
         },{merge:true});
       });
@@ -683,7 +725,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
     <p style={{fontSize:12,color:'var(--gray-600)',marginBottom:10}}>희망하는 상담 일정을 1개 선택하세요. 신청하면 해당 일정은 선착순 마감됩니다.</p>
     <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:12}}>
       {visibleSlots.map((s,i)=>{
-        const isSel=selected.includes(s.id);const isMine=s.confirmedFor===studentNumber;const isClosed=!!s.confirmedFor&&!isMine;const isConf=isMine&&myReq?.status==='confirmed';
+        const isSel=selected.includes(s.id);const isMine=s.confirmedFor===studentNumber;const isDone=!!s.completedFor;const isDoneMine=s.completedFor===studentNumber;const isClosed=(!!s.confirmedFor&&!isMine)||isDone;const isConf=isMine&&myReq?.status==='confirmed';
         return(<div key={s.id} onClick={()=>!isMine&&!isClosed&&toggle(s.id)}
           style={{display:'flex',alignItems:'center',gap:10,padding:'8px 12px',borderRadius:7,cursor:isMine||isClosed?'default':'pointer',opacity:isClosed?0.75:1,
             background:isMine?'#f0fdf4':isClosed?'#f8fafc':isSel?'#eff6ff':'var(--gray-50)',border:`1px solid ${isMine?'#a7f3d0':isClosed?'var(--gray-200)':isSel?'#93c5fd':'var(--gray-200)'}`,transition:'all .15s'}}>
@@ -696,7 +738,8 @@ function ScheduleSection({studentNumber,studentName,cls}){
             {place(s)&&<span style={{fontSize:11,color:'var(--gray-400)',marginLeft:6}}>{place(s)}</span>}
           </div>
           {isMine&&<span className={`badge ${isConf?'badge-green':'badge-blue'}`}>{isConf?'확정':'신청 완료'}</span>}
-          {isClosed&&<span className="badge badge-red">마감</span>}
+          {isDoneMine&&<span className="badge badge-gray">{s.completedRound?`${s.completedRound}회차 완료`:'상담 완료'}</span>}
+          {isClosed&&!isDoneMine&&<span className="badge badge-red">마감</span>}
           {!isMine&&!isClosed&&<span className="badge badge-green">신청가능</span>}
         </div>);})}
     </div>
