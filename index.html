@@ -62,7 +62,7 @@ button{-webkit-appearance:none;}
 .jungsi-row{display:flex;gap:5px;align-items:center;padding:5px 6px;background:var(--gray-50);border-radius:5px;border:1px solid var(--gray-100);margin-bottom:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
 
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:1000;}
-.modal{background:white;border-radius:14px;padding:28px;width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.modal{background:white;border-radius:14px;padding:28px;width:520px;max-height:90vh;overflow-y:auto;overflow-x:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);}
 .tab{padding:5px 14px;background:var(--gray-100);color:var(--gray-600);border-radius:5px;font-size:12px;}
 .tab.active{background:var(--primary);color:white;font-weight:600;}
 .empty-state{text-align:center;padding:60px 20px;color:var(--gray-400);}
@@ -487,10 +487,10 @@ function GradeSection({grades,onChange}){
   const set=(k,v)=>onChange({...g,[k]:v});const setN=(obj,k,v)=>onChange({...g,[obj]:{...(g[obj]||{}),[k]:v}});
   const setMock=(exam,subj,key,v)=>onChange({...g,mockScores:{...(g.mockScores||{}),[exam]:{...((g.mockScores||{})[exam]||{}),[subj]:{...(((g.mockScores||{})[exam]||{})[subj]||{}),[key]:v}}}});
   const renderGI=(field,label)=>(<div key={field} style={{flex:1,minWidth:60}}><div className="mini-label">{label}</div><input value={g[field]||''} onChange={e=>set(field,e.target.value)} style={{width:'100%',textAlign:'center',background:'#fef9c3',fontWeight:700,fontSize:15,padding:'5px 2px'}}/></div>);
-  const renderMI=(exam,subj,label)=>{const v=g.mockScores?.[exam]?.[subj]||{};const hasName=namedSubjects.has(subj);return(<div key={subj} style={{minWidth:hasName?162:118}}>
+  const renderMI=(exam,subj,label)=>{const v=g.mockScores?.[exam]?.[subj]||{};const hasName=namedSubjects.has(subj);return(<div key={subj} style={{minWidth:0,width:'100%'}}>
     <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:2,minHeight:29}}>
       <div className="mini-label" style={{textAlign:'left',paddingLeft:2,fontWeight:700,color:'var(--gray-500)',marginBottom:0,flexShrink:0}}>{label}</div>
-      {hasName&&<input value={v.name||''} onChange={e=>setMock(exam,subj,'name',e.target.value)} placeholder="과목명" style={{flex:1,minWidth:0,fontSize:11,padding:'3px 5px',borderRadius:4}}/>}
+      {hasName&&<input value={v.name||''} onChange={e=>setMock(exam,subj,'name',e.target.value)} placeholder="과목명" style={{flex:1,minWidth:0,maxWidth:90,fontSize:11,padding:'3px 5px',borderRadius:4}}/>}
     </div>
     <div style={{display:'grid',gridTemplateColumns:'46px 58px',gap:4}}>
       <input value={v.grad||''} onChange={e=>setMock(exam,subj,'grad',e.target.value)} placeholder="등급" style={{width:'100%',textAlign:'center',fontSize:12,padding:'5px 2px',background:'#eef2ff',fontWeight:700}}/>
@@ -499,7 +499,7 @@ function GradeSection({grades,onChange}){
   </div>);};
   const renderMockBlock=(exam,title)=>(<div key={exam} style={{border:'1px solid var(--gray-200)',borderRadius:8,padding:'10px 12px',background:'#fbfdff'}}>
     <div style={{fontSize:12,color:'var(--gray-700)',fontWeight:700,marginBottom:8}}>{title}</div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(118px,1fr))',gap:8}}>{subjects.map(([k,l])=>renderMI(exam,k,l))}</div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:8}}>{subjects.map(([k,l])=>renderMI(exam,k,l))}</div>
   </div>);
   return(<div className="section-box"><div className="section-title">📊 내신 및 수능 성적</div>
     <div style={{display:'flex',gap:6,marginBottom:12}}>{[['jeonGwaGyo','전교과'],['guksuYeongSa','국수영사'],['guksuYeongGwa','국수영과'],['tanAvg','탐구평균']].map(([field,label])=>renderGI(field,label))}</div>
@@ -835,9 +835,9 @@ function ScheduleModal({cls,onClose}){
     </div>
 
     {/* 슬롯 추가 */}
-    <div style={{background:'var(--gray-50)',borderRadius:8,padding:12,marginBottom:14,display:'flex',gap:8,alignItems:'flex-end',flexWrap:'nowrap'}}>
-      <div style={{flex:'0 0 150px'}}><div className="field-label">날짜</div><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{width:'100%'}}/></div>
-      <div style={{flex:'0 0 150px'}}><div className="field-label">교시</div><select value={period} onChange={e=>setPeriod(e.target.value)} style={{width:'100%'}}><option value="">선택</option>{Array.from({length:13},(_,i)=><option key={i} value={i}>{periodLabel(i)}</option>)}</select></div>
+    <div style={{background:'var(--gray-50)',borderRadius:8,padding:12,marginBottom:14,display:'flex',gap:8,alignItems:'flex-end',flexWrap:'wrap'}}>
+      <div style={{flex:'1 1 130px',minWidth:120}}><div className="field-label">날짜</div><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={{width:'100%'}}/></div>
+      <div style={{flex:'1 1 130px',minWidth:120}}><div className="field-label">교시</div><select value={period} onChange={e=>setPeriod(e.target.value)} style={{width:'100%'}}><option value="">선택</option>{Array.from({length:13},(_,i)=><option key={i} value={i}>{periodLabel(i)}</option>)}</select></div>
       <div style={{flex:'1 1 180px',minWidth:0}}><div className="field-label">장소</div><input value={location} onChange={e=>setLocation(e.target.value)} placeholder="예) 진로상담실" style={{width:'100%'}}/></div>
       <button onClick={addSlot} disabled={adding} className="btn-success" style={{padding:'6px 16px',flex:'0 0 auto',whiteSpace:'nowrap'}}>+ 추가</button>
     </div>
@@ -860,9 +860,9 @@ function ScheduleModal({cls,onClose}){
               const req=Object.entries(requests).filter(([k,v])=>v.requestedSlots?.includes(s.id));
               const reqStatus=s.confirmedFor&&requests[s.confirmedFor]?.status;
               const doneReq=s.completedFor&&requests[s.completedFor];
-              return(<div key={s.id} style={{display:'flex',gap:14,alignItems:'center',padding:'6px 10px',background:s.confirmedFor?'#f0fdf4':s.completedFor?'#f8fafc':'white',border:`1px solid ${s.confirmedFor?'#a7f3d0':s.completedFor?'var(--gray-200)':'var(--gray-200)'}`,borderRadius:7,marginBottom:4}}>
-                <span style={{fontWeight:600,fontSize:13,width:92,flexShrink:0}}>{slotLabel(s)}</span>
-                {place(s)&&<span style={{fontSize:11,color:'var(--gray-500)',width:115,flexShrink:0}}>{place(s)}</span>}
+              return(<div key={s.id} style={{display:'flex',gap:6,alignItems:'flex-start',flexWrap:'wrap',padding:'8px 10px',background:s.confirmedFor?'#f0fdf4':s.completedFor?'#f8fafc':'white',border:`1px solid ${s.confirmedFor?'#a7f3d0':s.completedFor?'var(--gray-200)':'var(--gray-200)'}`,borderRadius:7,marginBottom:4}}>
+                <span style={{fontWeight:600,fontSize:13,width:70,flexShrink:0}}>{slotLabel(s)}</span>
+                {place(s)&&<span style={{fontSize:11,color:'var(--gray-500)',maxWidth:110,flexShrink:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{place(s)}</span>}
                 {s.confirmedFor?(
                   <><span className={`badge ${reqStatus==='confirmed'?'badge-green':'badge-blue'}`}>{studentStatusLabel(s.confirmedFor,reqStatus==='confirmed'?'상담 확정':'상담 신청')}</span>
                   {requests[s.confirmedFor]?.studentNote&&<span style={{fontSize:11,color:'var(--gray-500)',flex:1,minWidth:0,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:160}} title={requests[s.confirmedFor].studentNote}>메모: {requests[s.confirmedFor].studentNote}</span>}
