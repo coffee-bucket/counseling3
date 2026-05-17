@@ -108,7 +108,7 @@ const uid=()=>Math.random().toString(36).slice(2);
 const genPw=()=>{const c='abcdefghjkmnpqrstuvwxyz23456789';return Array.from({length:8},()=>c[Math.floor(Math.random()*c.length)]).join('');};
 const sEmail=(sNum,pid)=>`s${sNum}@${pid}.counseling`;
 const clsRef=cls=>db.collection('classes').doc(String(cls));
-const emptyMock=()=>({guk:{grad:'',pct:''},su:{grad:'',pct:''},yeong:{grad:'',pct:''},tan1:{grad:'',pct:''},tan2:{grad:'',pct:''}});
+const emptyMock=()=>({guk:{name:'',grad:'',pct:''},su:{name:'',grad:'',pct:''},yeong:{grad:'',pct:''},tan1:{name:'',grad:'',pct:''},tan2:{name:'',grad:'',pct:''}});
 const defaultGrades=()=>({jeonGwaGyo:'',guksuYeongSa:'',guksuYeongGwa:'',tanAvg:'',suneungGrad:{guk:'',su:'',yeong:'',tan1:'',tan2:''},suneungPct:{guk:'',su:'',tan1:'',tan2:''},mockScores:{june:emptyMock(),sep:emptyMock()}});
 const defRes=yr=>({year:yr,rate:'',chungwon:'',avg:'',cut70:''});
 const defSusi=()=>({id:uid(),category:'4년제',univ:'',jType:'교과',jName:'',major:'',capacity:'',ratio:{naesin:'',seoryu:'',myeon:'',gita:''},results:[defRes('25'),defRes('24'),defRes('23')],suneungMin:'',difficulty:'',schedule:{apply:'',step1:'',interview:'',final:''},note:''});
@@ -286,12 +286,16 @@ function BulkAccountModal({students,cls,projectId,onClose}){
 /* ── Grade Section ── */
 function GradeSection({grades,onChange}){
   const g=grades||defaultGrades();
-  const subjects=[['guk','국'],['su','수'],['yeong','영'],['tan1','탐1'],['tan2','탐2']];
+  const subjects=[['guk','국어'],['su','수학'],['yeong','영어'],['tan1','탐구1'],['tan2','탐구2']];
+  const namedSubjects=new Set(['guk','su','tan1','tan2']);
   const set=(k,v)=>onChange({...g,[k]:v});const setN=(obj,k,v)=>onChange({...g,[obj]:{...(g[obj]||{}),[k]:v}});
   const setMock=(exam,subj,key,v)=>onChange({...g,mockScores:{...(g.mockScores||{}),[exam]:{...((g.mockScores||{})[exam]||{}),[subj]:{...(((g.mockScores||{})[exam]||{})[subj]||{}),[key]:v}}}});
   const GI=({field,label})=>(<div style={{flex:1,minWidth:60}}><div className="mini-label">{label}</div><input value={g[field]||''} onChange={e=>set(field,e.target.value)} style={{width:'100%',textAlign:'center',background:'#fef9c3',fontWeight:700,fontSize:15,padding:'5px 2px'}}/></div>);
-  const MI=({exam,subj,label})=>{const v=g.mockScores?.[exam]?.[subj]||{};return(<div style={{minWidth:118}}>
-    <div className="mini-label" style={{textAlign:'left',paddingLeft:2,fontWeight:700,color:'var(--gray-500)'}}>{label}</div>
+  const MI=({exam,subj,label})=>{const v=g.mockScores?.[exam]?.[subj]||{};const hasName=namedSubjects.has(subj);return(<div style={{minWidth:hasName?162:118}}>
+    <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:2}}>
+      <div className="mini-label" style={{textAlign:'left',paddingLeft:2,fontWeight:700,color:'var(--gray-500)',marginBottom:0,flexShrink:0}}>{label}</div>
+      {hasName&&<input value={v.name||''} onChange={e=>setMock(exam,subj,'name',e.target.value)} placeholder="과목명" style={{flex:1,minWidth:0,fontSize:11,padding:'3px 5px',borderRadius:4}}/>}
+    </div>
     <div style={{display:'grid',gridTemplateColumns:'46px 58px',gap:4}}>
       <input value={v.grad||''} onChange={e=>setMock(exam,subj,'grad',e.target.value)} placeholder="등급" style={{width:'100%',textAlign:'center',fontSize:12,padding:'5px 2px',background:'#eef2ff',fontWeight:700}}/>
       <input value={v.pct||''} onChange={e=>setMock(exam,subj,'pct',e.target.value)} placeholder="백분위" style={{width:'100%',textAlign:'center',fontSize:12,padding:'5px 2px'}}/>
@@ -364,7 +368,7 @@ function JungsiSection({jungsiList,onChange}){
 
 /* ── Print View (상담표) ── */
 function PrintView({data,cls}){
-  const g=data.grades||defaultGrades();const susi=(data.susiList||[]).filter(e=>e.univ);const jungsi=data.jungsiList||[];const dc=d=>d?`diff-${d}`:'';const ms=(exam,subj,key)=>g.mockScores?.[exam]?.[subj]?.[key]||'-';
+  const g=data.grades||defaultGrades();const susi=(data.susiList||[]).filter(e=>e.univ);const jungsi=data.jungsiList||[];const dc=d=>d?`diff-${d}`:'';const ms=(exam,subj,key)=>g.mockScores?.[exam]?.[subj]?.[key]||'-';const mn=(exam,subj)=>g.mockScores?.[exam]?.[subj]?.name;
   return(<div className="print-area">
     <div className="ph"><h2>2027학년도 수시·정시 지원 상담표</h2><p>3학년 {cls}반</p></div>
     <table className="info-tbl" style={{marginBottom:8}}><tbody>
@@ -374,8 +378,8 @@ function PrintView({data,cls}){
     <div className="sec-title">📊 내신 및 수능 성적</div>
     <table className="grade-tbl" style={{marginBottom:8}}><thead><tr><th>전교과</th><th>국수영사</th><th>국수영과</th><th>탐구평균</th></tr></thead>
     <tbody><tr><td className="grade-val">{g.jeonGwaGyo||'-'}</td><td className="grade-val">{g.guksuYeongSa||'-'}</td><td className="grade-val">{g.guksuYeongGwa||'-'}</td><td className="grade-val">{g.tanAvg||'-'}</td></tr></tbody></table>
-    <table className="grade-tbl" style={{marginBottom:8}}><thead><tr><th>시험</th><th>국 등/%</th><th>수 등/%</th><th>영 등/%</th><th>탐1 등/%</th><th>탐2 등/%</th></tr></thead>
-    <tbody>{['june','sep'].map(exam=><tr key={exam}><td className="gun-cell">{exam==='june'?'6월 모의고사':'9월 모의고사'}</td>{['guk','su','yeong','tan1','tan2'].map(subj=><td key={subj}>{ms(exam,subj,'grad')} / {ms(exam,subj,'pct')}</td>)}</tr>)}</tbody></table>
+    <table className="grade-tbl" style={{marginBottom:8}}><thead><tr><th>시험</th><th>국어 등/%</th><th>수학 등/%</th><th>영어 등/%</th><th>탐구1 등/%</th><th>탐구2 등/%</th></tr></thead>
+    <tbody>{['june','sep'].map(exam=><tr key={exam}><td className="gun-cell">{exam==='june'?'6월 모의고사':'9월 모의고사'}</td>{['guk','su','yeong','tan1','tan2'].map(subj=><td key={subj}>{mn(exam,subj)&&<span style={{fontSize:9,color:'#64748b'}}>{mn(exam,subj)}<br/></span>}{ms(exam,subj,'grad')} / {ms(exam,subj,'pct')}</td>)}</tr>)}</tbody></table>
     <div className="sec-title">🏫 수시 지원 계획</div>
     {susi.length===0?<p style={{fontSize:11,color:'#999',marginBottom:6}}>입력 없음</p>:(<table className="susi-tbl" style={{marginBottom:8}}><thead><tr><th>구분</th><th>대학</th><th>전형</th><th>전형명</th><th>학과</th><th>인원</th><th>내신%</th><th>서류%</th><th>면접%</th><th>수능최저</th><th>25년</th><th>24년</th><th>면접일</th><th>최종발표</th><th>가능성</th><th>비고</th></tr></thead>
     <tbody>{susi.map((e,i)=>(<tr key={i} className={e.category==='전문대'?'cat-전문대':'cat-4year'}><td className="center">{e.category}</td><td style={{fontWeight:600}}>{e.univ}</td><td className="center">{e.jType}</td><td>{e.jName}</td><td>{e.major}</td><td className="center">{e.capacity}</td><td className="center">{e.ratio?.naesin}</td><td className="center">{e.ratio?.seoryu}</td><td className="center">{e.ratio?.myeon}</td><td className="center">{e.suneungMin}</td><td className="center">{e.results?.[0]?`${e.results[0].rate||'-'}/${e.results[0].avg||'-'}`:'-'}</td><td className="center">{e.results?.[1]?`${e.results[1].rate||'-'}/${e.results[1].avg||'-'}`:'-'}</td><td className="center">{e.schedule?.interview||'-'}</td><td className="center">{e.schedule?.final||'-'}</td><td className={`center ${dc(e.difficulty)}`}>{e.difficulty||'-'}</td><td>{e.note}</td></tr>))}</tbody></table>)}
