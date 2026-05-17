@@ -230,9 +230,12 @@ function AccountInfoModal({student,projectId,onClose}){
         <div style={{fontSize:11,color:'var(--gray-500)',marginBottom:3}}>아이디 (학번)</div>
         <div style={{fontSize:16,fontWeight:700,fontFamily:'monospace'}}>{acct.studentNumber}</div>
       </div>
-      <div style={{background:'#f0f9ff',borderRadius:8,padding:14,marginBottom:16}}>
+      <div style={{background:'#f0f9ff',borderRadius:8,padding:14,marginBottom:12}}>
         <div style={{fontSize:11,color:'var(--gray-500)',marginBottom:3}}>현재 비밀번호</div>
         <div style={{fontSize:22,fontWeight:700,fontFamily:'monospace',letterSpacing:4,color:'#1d4ed8'}}>{acct.password||'—'}</div>
+      </div>
+      <div style={{background:'#fef9c3',border:'1px solid #fde68a',borderRadius:6,padding:'8px 12px',marginBottom:12,fontSize:11,color:'#854d0e',lineHeight:1.7}}>
+        ⚠ 재발급된 비밀번호는 <strong>다른 사이트 비밀번호와 다르게</strong> 설정하세요.<br/>새 비밀번호는 <strong>6자 이상</strong>으로 입력해야 합니다.
       </div>
       <div style={{display:'flex',gap:8}}>
         <button onClick={reset} disabled={resetting} style={{flex:1,padding:'10px',background:'var(--warning)',color:'white',fontWeight:700,fontSize:13,borderRadius:7}}>{resetting?'재발급 중...':'🔄 비밀번호 재발급'}</button>
@@ -567,27 +570,32 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
     </div>
     <div className="screen-content" style={{maxWidth:1100,margin:'0 auto',padding:'16px 20px'}}>
       {!isTeacher&&<div style={{background:'#fef9c3',border:'1px solid #fde68a',borderRadius:8,padding:12,marginBottom:12,fontSize:12,color:'#854d0e'}}>💡 대학 조사 내용을 입력하고 <strong>저장</strong>을 눌러주세요.</div>}
+      {!isTeacher&&<div style={{background:'#fef2f2',border:'1px solid #fecaca',borderRadius:8,padding:'10px 14px',marginBottom:10,fontSize:11,color:'#991b1b',lineHeight:1.7}}>
+        ⚠️ <strong>개인정보 접근 경고</strong><br/>
+        타인의 학번·비밀번호를 이용하거나 부적절한 방법으로 다른 학생의 정보에 접근하는 행위는 개인정보보호법 위반으로 법적 처벌을 받을 수 있습니다. 반드시 본인 계정으로만 로그인하세요.
+      </div>}
       <div className="section-box" style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
         <div><div className="field-label">번호</div><input value={data.no||''} readOnly style={{width:50,background:'var(--gray-50)'}}/></div>
         <div><div className="field-label">학번</div><input value={data.studentNumber||''} readOnly style={{width:90,background:'var(--gray-50)'}}/></div>
         <div><div className="field-label">이름</div><input value={data.name||''} readOnly style={{width:90,background:'var(--gray-50)'}}/></div>
         {isTeacher&&<><div><div className="field-label">상담일자</div><input type="date" value={data.counselingDate||''} onChange={e=>update('counselingDate',e.target.value)}/></div>
-        <div style={{flex:1,minWidth:120}}><div className="field-label">수시 상담 메모</div><input value={data.susiMemo||''} onChange={e=>update('susiMemo',e.target.value)} style={{width:'100%'}}/></div>
-        <div style={{flex:1,minWidth:120}}><div className="field-label">정시 상담 메모</div><input value={data.jungsiMemo||''} onChange={e=>update('jungsiMemo',e.target.value)} style={{width:'100%'}}/></div>
-        <div style={{flex:1.5,minWidth:140}}><div className="field-label">상담 특이사항</div><input value={data.specialNote||''} onChange={e=>update('specialNote',e.target.value)} style={{width:'100%'}}/></div></>}
+        <div style={{flex:2,minWidth:200}}><div className="field-label">특이사항</div><input value={data.specialNote||''} onChange={e=>update('specialNote',e.target.value)} style={{width:'100%'}}/></div></>}
         {!isTeacher&&<div style={{flex:1,minWidth:200}}><div className="field-label">메모 (궁금한 점 등)</div><input value={data.studentNote||''} onChange={e=>update('studentNote',e.target.value)} style={{width:'100%'}}/></div>}
       </div>
       {isTeacher&&<div className="section-box">
         <div className="section-title">상담 누적 기록</div>
         <div style={{display:'grid',gridTemplateColumns:'150px 100px 1fr auto',gap:8,alignItems:'end',marginBottom:10}}>
-          <div><div className="field-label">확정 상담일자</div><input value={counselSlot?.date||data.counselingDate||''} readOnly style={{width:'100%',background:'var(--gray-50)'}}/></div>
+          <div><div className="field-label">상담일자</div><input value={counselSlot?.date||data.counselingDate||''} readOnly style={{width:'100%',background:'var(--gray-50)'}}/></div>
           <div><div className="field-label">회차</div><input value={`${counselReq?.round||data.counselingRound||1}회차`} readOnly style={{width:'100%',background:'var(--gray-50)',textAlign:'center',fontWeight:700}}/></div>
-          <div><div className="field-label">상담 내용</div><input value={recordText} onChange={e=>setRecordText(e.target.value)} placeholder="상담 내용을 입력하세요" style={{width:'100%'}}/></div>
-          <button onClick={saveCounselRecord} disabled={recordSaving} style={{background:'var(--primary)',color:'white',fontWeight:700,padding:'7px 14px',borderRadius:6}}>{recordSaving?'저장 중...':'상담 내용 저장'}</button>
+          <div style={{gridColumn:'1 / -1'}}><div className="field-label">상담 내용</div><textarea value={recordText} onChange={e=>setRecordText(e.target.value)} placeholder="상담 내용을 입력하세요 (줄바꿈 가능)" rows={3} style={{width:'100%',resize:'vertical',lineHeight:1.6,padding:'6px 8px',border:'1px solid var(--gray-300)',borderRadius:5,fontFamily:'inherit',fontSize:12}}/></div>
+          <button onClick={saveCounselRecord} disabled={recordSaving} style={{background:'var(--primary)',color:'white',fontWeight:700,padding:'7px 14px',borderRadius:6,gridColumn:'1 / -1'}}>{recordSaving?'저장 중...':'💾 상담 내용 저장'}</button>
         </div>
         {(data.counselingRecords||[]).length===0?<div style={{fontSize:12,color:'var(--gray-400)',textAlign:'center',padding:'12px',background:'var(--gray-50)',borderRadius:6}}>저장된 상담 기록이 없습니다</div>:
-          <div style={{display:'grid',gap:6}}>{(data.counselingRecords||[]).map(r=><div key={r.id} style={{display:'grid',gridTemplateColumns:'120px 70px 1fr',gap:8,alignItems:'center',padding:'7px 9px',background:'var(--gray-50)',border:'1px solid var(--gray-100)',borderRadius:6}}>
-            <span style={{fontWeight:700,color:'var(--gray-600)'}}>{r.date||'-'}</span><span className="badge badge-blue">{r.round||1}회차</span><span style={{color:'var(--gray-700)'}}>{r.content}</span>
+          <div style={{display:'grid',gap:6}}>{(data.counselingRecords||[]).map(r=><div key={r.id} style={{display:'grid',gridTemplateColumns:'110px 60px 1fr auto',gap:8,alignItems:'start',padding:'7px 9px',background:'var(--gray-50)',border:'1px solid var(--gray-100)',borderRadius:6}}>
+            <span style={{fontWeight:700,color:'var(--gray-600)',paddingTop:2}}>{r.date||'-'}</span>
+            <span className="badge badge-blue" style={{alignSelf:'start',marginTop:2}}>{r.round||1}회차</span>
+            <span style={{color:'var(--gray-700)',whiteSpace:'pre-wrap',wordBreak:'break-all'}}>{r.content}</span>
+            <button onClick={()=>{if(window.confirm('이 상담 기록을 삭제하시겠습니까?')){const updated=(data.counselingRecords||[]).filter(x=>x.id!==r.id);update('counselingRecords',updated);}}} style={{background:'none',color:'var(--gray-300)',fontSize:14,padding:'2px 4px',alignSelf:'start'}} onMouseEnter={e=>e.target.style.color='var(--danger)'} onMouseLeave={e=>e.target.style.color='var(--gray-300)'}>🗑</button>
           </div>)}</div>}
       </div>}
       {!isTeacher&&cls&&<ScheduleSection studentNumber={data.studentNumber} studentName={data.name} cls={cls}/>}
@@ -1183,15 +1191,13 @@ function App(){
     setTeacherProfile(null);setRole('student');setUser(u);setScreen('app');
   };
   useEffect(()=>{
-    const cfg={"apiKey":"AIzaSyBYHjmTrzCMeyoisRwCh21ExtcyDt0JoVw","authDomain":"cons-cfa95.firebaseapp.com","projectId":"cons-cfa95","storageBucket":"cons-cfa95.firebasestorage.app","messagingSenderId":"814071622450","appId":"1:814071622450:web:583f037cc07f4999ee852b"};
-    try{
-      initFirebase(cfg);setProjectId(cfg.projectId);
-      localStorage.setItem('fbConfig',JSON.stringify(cfg));
+    const saved=localStorage.getItem('fbConfig');
+    if(saved){try{const cfg=JSON.parse(saved);initFirebase(cfg);setProjectId(cfg.projectId);
       const unsub=auth.onAuthStateChanged(u=>{
         resolveUser(u).catch(e=>{console.error(e);setUser(null);setRole(null);setTeacherProfile(null);setScreen('login');});
       });
-      return()=>unsub();
-    }catch(e){console.error('Firebase 초기화 오류:',e);setScreen('config');}
+      return()=>unsub();}catch(e){localStorage.removeItem('fbConfig');setScreen('config');}}
+    else setScreen('config');
   },[]);
   const handleConfig=cfg=>{initFirebase(cfg);setProjectId(cfg.projectId);auth.onAuthStateChanged(u=>{resolveUser(u).catch(e=>{console.error(e);setScreen('login');});});};
   const handleLogout=()=>{auth.signOut();setScreen('login');setUser(null);setRole(null);setTeacherProfile(null);};
