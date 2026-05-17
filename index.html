@@ -300,7 +300,49 @@ function BulkAccountModal({students,teacherUid,projectId,cls,onClose}){
     }
     setResults(newResults);setErrors(newErrors);setPhase('done');};
 
-  const printCards=()=>{onPrint(results);onClose();};
+  const printCards=()=>{
+    const APP_URL='coffee-bucket.github.io/counseling';
+    const cards=results.filter(r=>r.pw&&r.pw!=='(기존계정)');
+    if(cards.length===0){alert('인쇄할 계정 카드가 없습니다.');return;}
+    const html=`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+<title>계정 카드 - 3학년 ${cls}반</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'맑은 고딕','Malgun Gothic',sans-serif;background:white;padding:8mm;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:5mm;}
+.card{border:1.5px dashed #999;border-radius:6px;padding:10px 12px;break-inside:avoid;page-break-inside:avoid;}
+.school{font-size:9px;color:#555;margin-bottom:2px;}
+.cls{font-size:10px;color:#555;margin-bottom:4px;}
+.name{font-size:19px;font-weight:700;margin-bottom:6px;color:#111;}
+hr{border:none;border-top:1px dashed #ccc;margin:6px 0;}
+.url{font-size:9px;color:#555;margin-bottom:5px;}
+.row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.lbl{font-size:9px;color:#555;width:52px;flex-shrink:0;}
+.val{font-size:12px;font-weight:700;font-family:monospace;color:#111;letter-spacing:1px;}
+.pw{font-size:17px;font-weight:700;font-family:monospace;color:#1d4ed8;letter-spacing:3px;}
+.note{font-size:8px;color:#aaa;margin-top:4px;}
+@page{margin:0;}
+@media print{body{padding:8mm;}}
+</style></head><body>
+<div class="grid">
+${cards.map(s=>`
+<div class="card">
+  <div class="school">🎓 양주백석고 3학년부</div>
+  <div class="cls">3학년 ${cls}반 · ${s.no}번</div>
+  <div class="name">${s.name}</div>
+  <hr/>
+  <div class="url">🌐 ${APP_URL}</div>
+  <div class="row"><span class="lbl">아이디(학번)</span><span class="val">${s.studentNumber}</span></div>
+  <div class="row"><span class="lbl">비밀번호</span><span class="pw">${s.pw}</span></div>
+  <div class="note">* 비밀번호는 안전한 곳에 보관하세요</div>
+</div>`).join('')}
+</div>
+<script>window.onload=()=>{window.print();}<\/script>
+</body></html>`;
+    const w=window.open('','_blank','width=900,height=700');
+    if(w){w.document.write(html);w.document.close();}
+    else{alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도하세요.');}
+  };
 
   const APP_URL='coffee-bucket.github.io/counseling';
 
@@ -565,18 +607,10 @@ function TeacherDashboard({user,onLogout}){
   const [search,setSearch]=useState('');
   const [filter,setFilter]=useState('전체');
   const [bulkModal,setBulkModal]=useState(false);
-  const [printResults,setPrintResults]=useState(null);
   const [acctModal,setAcctModal]=useState(null);
   const [projectId,setProjectId]=useState('');
 
   useEffect(()=>{const cfg=localStorage.getItem('fbConfig');if(cfg){try{setProjectId(JSON.parse(cfg).projectId);}catch(e){}}}, []);
-
-  // 인쇄: 모달 닫힌 후 자동 실행
-  useEffect(()=>{
-    if(printResults){
-      const t=setTimeout(()=>{window.print();},300);
-      return()=>clearTimeout(t);}
-  },[printResults]);
 
   const userRef=useCallback(()=>db.collection('teachers').doc(user.uid),[user.uid]);
 
@@ -644,6 +678,17 @@ function TeacherDashboard({user,onLogout}){
         {['전체','완료','미완료','계정있음','계정없음'].map(f=><button key={f} className={`tab ${filter===f?'active':''}`} onClick={()=>setFilter(f)}>{f}</button>)}
       </div>
       <div style={{marginLeft:'auto',display:'flex',gap:6}}>
+        <button onClick={async()=>{
+          if(!window.confirm('학생 계정 연결 정보를 초기화하시겠습니까?\n(Firebase Auth 계정을 먼저 삭제한 후 사용하세요)'))return;
+          const batch=db.batch();
+          students.forEach(s=>{
+            const ref=db.collection('teachers').doc(user.uid).collection('students').doc(s.studentNumber||s.id);
+            batch.update(ref,{authUid:firebase.firestore.FieldValue.delete()});});
+          await batch.commit();
+          alert('초기화 완료! 이제 전체 계정 생성을 다시 실행하세요.');
+        }} style={{background:'#dc2626',color:'white',fontWeight:600,padding:'7px 12px',fontSize:11,borderRadius:6}}>
+          🔄 authUid 초기화
+        </button>
         <button onClick={()=>setBulkModal(true)} style={{background:'#7c3aed',color:'white',fontWeight:700,padding:'7px 16px',fontSize:12,borderRadius:6}}>
           🔑 전체 계정 생성 ({students.filter(s=>!s.authUid).length}명)
         </button>
@@ -674,9 +719,8 @@ function TeacherDashboard({user,onLogout}){
       </div>);})}
     </div>)}
 
-    {bulkModal&&<BulkAccountModal students={students} teacherUid={user.uid} projectId={projectId} cls={classInfo.clsNum} onClose={()=>setBulkModal(false)} onPrint={results=>{setPrintResults(results);}}/>}
+    {bulkModal&&<BulkAccountModal students={students} teacherUid={user.uid} projectId={projectId} cls={classInfo.clsNum} onClose={()=>setBulkModal(false)}/>}
     {acctModal&&<AccountInfoModal student={acctModal} projectId={projectId} teacherUid={user.uid} onClose={()=>setAcctModal(null)}/>}
-    {printResults&&<CredPrintPage results={printResults} cls={classInfo.clsNum}/>}
   </div>);}
 
 /* ── Student Dashboard ── */
