@@ -494,9 +494,9 @@ function GradeSection({grades,onChange}){
       <div className="mini-label" style={{textAlign:'left',paddingLeft:2,fontWeight:700,color:'var(--gray-500)',marginBottom:0,flexShrink:0}}>{label}</div>
       {hasName&&<input value={v.name||''} onChange={e=>setMock(exam,subj,'name',e.target.value)} placeholder="과목명" style={{flex:1,minWidth:0,maxWidth:90,fontSize:11,padding:'3px 5px',borderRadius:4}}/>}
     </div>
-    <div style={{display:'grid',gridTemplateColumns:'46px 58px',gap:4}}>
+    <div style={{display:'grid',gridTemplateColumns:subj==='yeong'?'46px':'46px 58px',gap:4}}>
       <input value={v.grad||''} onChange={e=>setMock(exam,subj,'grad',e.target.value)} placeholder="등급" style={{width:'100%',textAlign:'center',fontSize:12,padding:'5px 2px',background:'#eef2ff',fontWeight:700}}/>
-      <input value={v.pct||''} onChange={e=>setMock(exam,subj,'pct',e.target.value)} placeholder="백분위" style={{width:'100%',textAlign:'center',fontSize:12,padding:'5px 2px'}}/>
+      {subj!=='yeong'&&<input value={v.pct||''} onChange={e=>setMock(exam,subj,'pct',e.target.value)} placeholder="백분위" style={{width:'100%',textAlign:'center',fontSize:12,padding:'5px 2px'}}/>}
     </div>
   </div>);};
   const renderMockBlock=(exam,title)=>(<div key={exam} style={{border:'1px solid var(--gray-200)',borderRadius:8,padding:'10px 12px',background:'#fbfdff'}}>
@@ -525,7 +525,7 @@ function SusiEntryRow({entry,onChange,onDelete}){
       <input value={entry.jName||''} onChange={e=>set('jName',e.target.value)} placeholder="전형명" style={{flex:1.5,minWidth:90}}/>
       <input value={entry.major||''} onChange={e=>set('major',e.target.value)} placeholder="학과명" style={{flex:2,minWidth:90}}/>
       <input value={entry.capacity||''} onChange={e=>set('capacity',e.target.value)} placeholder="인원" style={{width:44,textAlign:'center'}}/>
-      <button style={{background:'#fee2e2',color:'#dc2626',border:'none',borderRadius:5,padding:'4px 10px',fontSize:15,fontWeight:700,flexShrink:0,marginLeft:'auto'}} onClick={()=>{if(window.confirm('이 수시 지원 항목을 삭제하시겠습니까?'))onDelete();}}>✕</button>
+      <button style={{background:'none',color:'var(--gray-300)',padding:'4px 6px',fontSize:14}} onClick={onDelete}>✕</button>
     </div>
     <div className="susi-row" style={{marginBottom:4}}>
       <span style={{fontSize:11,color:'var(--gray-500)',whiteSpace:'nowrap',fontWeight:600}}>전형요소</span>
@@ -584,7 +584,7 @@ function PrintView({data,cls}){
     <div className="sec-title">📊 내신 및 수능 성적</div>
     <table className="grade-tbl" style={{marginBottom:8}}><thead><tr><th>전교과</th><th>국수영사</th><th>국수영과</th><th>탐구평균</th></tr></thead>
     <tbody><tr><td className="grade-val">{g.jeonGwaGyo||'-'}</td><td className="grade-val">{g.guksuYeongSa||'-'}</td><td className="grade-val">{g.guksuYeongGwa||'-'}</td><td className="grade-val">{g.tanAvg||'-'}</td></tr></tbody></table>
-    <table className="grade-tbl" style={{marginBottom:8}}><thead><tr><th>시험</th>{['국어','수학','영어','탐구1','탐구2'].map(h=><th key={h} style={{minWidth:70,lineHeight:1.25,whiteSpace:'normal'}}>{h}<br/>등급/백분위</th>)}</tr></thead>
+    <table className="grade-tbl" style={{marginBottom:8}}><thead><tr><th>시험</th>{['국어','수학','영어','탐구1','탐구2'].map(h=><th key={h} style={{minWidth:70,lineHeight:1.25,whiteSpace:'normal'}}>{h}<br/>{h==='영어'?'등급':'등급/백분위'}</th>)}</tr></thead>
     <tbody>{['june','sep'].map(exam=><tr key={exam}><td className="gun-cell">{exam==='june'?'6월 모의고사':'9월 모의고사'}</td>{['guk','su','yeong','tan1','tan2'].map(subj=><td key={subj}>{mn(exam,subj)&&<span style={{fontSize:9,color:'#64748b'}}>{mn(exam,subj)}<br/></span>}{ms(exam,subj,'grad')} / {ms(exam,subj,'pct')}</td>)}</tr>)}</tbody></table>
     <div className="sec-title">🏫 수시 지원 계획</div>
     {susi.length===0?<p style={{fontSize:11,color:'#999',marginBottom:6}}>입력 없음</p>:(<table className="susi-tbl" style={{marginBottom:8}}><thead><tr><th>구분</th><th>대학</th><th>전형</th><th>전형명</th><th>학과</th><th>인원</th><th>내신%</th><th>서류%</th><th>면접%</th><th>수능최저</th><th>26년</th><th>25년</th><th>24년</th><th>면접일</th><th>최종발표</th><th>가능성</th><th>비고</th></tr></thead>
@@ -677,7 +677,7 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
       <div className="section-box">
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
           <div className="section-title" style={{marginBottom:0}}>🏫 수시 지원 계획</div>
-          <button className="btn-success" onClick={()=>{addSusi();alert('수시 지원 항목이 추가되었습니다. 아래에서 내용을 입력해주세요.');}} >+ 항목 추가</button>
+          <button className="btn-success" onClick={addSusi}>+ 항목 추가</button>
         </div>
         {(data.susiList||[]).length===0&&<div style={{textAlign:'center',padding:'20px',color:'var(--gray-400)'}}>항목 추가 버튼을 눌러 대학을 입력하세요</div>}
         {(data.susiList||[]).map((e,idx)=><SusiEntryRow key={e.id||idx} entry={e} onChange={en=>updateSusi(idx,en)} onDelete={()=>deleteSusi(idx)}/>)}
