@@ -63,7 +63,7 @@ button{-webkit-appearance:none;}
 .gun-header{display:inline-block;font-weight:700;font-size:12px;color:#4f46e5;background:#eef2ff;border-radius:5px;padding:3px 10px;margin-bottom:6px;}
 .jungsi-row{display:flex;gap:5px;align-items:center;padding:5px 6px;background:var(--gray-50);border-radius:5px;border:1px solid var(--gray-100);margin-bottom:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;}
 
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:1000;}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;}
 .modal{background:white;border-radius:14px;padding:28px;width:520px;max-height:90vh;overflow-y:auto;overflow-x:hidden;box-shadow:0 20px 60px rgba(0,0,0,.2);}
 .tab{padding:5px 14px;background:var(--gray-100);color:var(--gray-600);border-radius:5px;font-size:12px;}
 .tab.active{background:var(--primary);color:white;font-weight:600;}
@@ -488,14 +488,15 @@ function GradeSection({grades,onChange}){
   const namedSubjects=new Set(['guk','su','tan1','tan2']);
   const set=(k,v)=>onChange({...g,[k]:v});const setN=(obj,k,v)=>onChange({...g,[obj]:{...(g[obj]||{}),[k]:v}});
   const setMock=(exam,subj,key,v)=>onChange({...g,mockScores:{...(g.mockScores||{}),[exam]:{...((g.mockScores||{})[exam]||{}),[subj]:{...(((g.mockScores||{})[exam]||{})[subj]||{}),[key]:v}}}});
+  const [mockOpen,setMockOpen]=React.useState(false);
   const renderGI=(field,label)=>(<div key={field} style={{flex:1,minWidth:60}}><div className="mini-label">{label}</div><input value={g[field]||''} onChange={e=>set(field,e.target.value)} style={{width:'100%',textAlign:'center',background:'#fef9c3',fontWeight:700,fontSize:15,padding:'5px 2px'}}/></div>);
   const renderMI=(exam,subj,label)=>{const v=g.mockScores?.[exam]?.[subj]||{};const hasName=namedSubjects.has(subj);return(<div key={subj} style={{minWidth:0,width:'100%'}}>
     <div style={{display:'flex',alignItems:'center',gap:4,marginBottom:2,minHeight:29}}>
       <div className="mini-label" style={{textAlign:'left',paddingLeft:2,fontWeight:700,color:'var(--gray-500)',marginBottom:0,flexShrink:0}}>{label}</div>
-      {hasName&&<input value={v.name||''} onChange={e=>setMock(exam,subj,'name',e.target.value)} placeholder="과목명" style={{flex:1,minWidth:0,maxWidth:90,fontSize:11,padding:'3px 5px',borderRadius:4}}/>}
+      {hasName&&<input value={v.name||''} onChange={e=>setMock(exam,subj,'name',e.target.value)} placeholder="과목명" style={{flex:1,minWidth:0,maxWidth:90,fontSize:13,padding:'3px 5px',borderRadius:4}}/>}
     </div>
     <div style={{display:'grid',gridTemplateColumns:'46px 58px',gap:4}}>
-      <input value={v.grad||''} onChange={e=>setMock(exam,subj,'grad',e.target.value)} placeholder="등급" style={{width:'100%',textAlign:'center',fontSize:12,padding:'5px 2px',background:'#eef2ff',fontWeight:700}}/>
+      <input value={v.grad||''} onChange={e=>setMock(exam,subj,'grad',e.target.value)} placeholder="등급" style={{width:'100%',textAlign:'center',fontSize:12,padding:'5px 2px',background:'white',fontWeight:700}}/>
       <input value={v.pct||''} onChange={e=>setMock(exam,subj,'pct',e.target.value)} placeholder="백분위" style={{width:'100%',textAlign:'center',fontSize:12,padding:'5px 2px'}}/>
     </div>
   </div>);};
@@ -506,8 +507,15 @@ function GradeSection({grades,onChange}){
   return(<div className="section-box"><div className="section-title">📊 내신 및 수능 성적</div>
     <div style={{display:'flex',gap:6,marginBottom:12}}>{[['jeonGwaGyo','전교과'],['guksuYeongSa','국수영사'],['guksuYeongGwa','국수영과'],['tanAvg','탐구평균']].map(([field,label])=>renderGI(field,label))}</div>
     <div style={{display:'grid',gap:10}}>
-      {renderMockBlock('june','6월 모의고사')}
-      {renderMockBlock('sep','9월 모의고사')}
+      <div>
+        <button onClick={()=>setMockOpen(o=>!o)} style={{display:'flex',alignItems:'center',gap:6,background:'none',color:'var(--gray-600)',fontSize:12,fontWeight:600,padding:'4px 0',marginBottom:mockOpen?10:0}}>
+          <span>{mockOpen?'▼':'▶'}</span> 모의고사 성적 {mockOpen?'접기':'펼치기'}
+        </button>
+        {mockOpen&&<div style={{display:'grid',gap:10}}>
+          {renderMockBlock('june','6월 모의고사')}
+          {renderMockBlock('sep','9월 모의고사')}
+        </div>}
+      </div>
     </div></div>);}
 
 /* ── Susi Entry Row ── */
@@ -520,12 +528,12 @@ function SusiEntryRow({entry,onChange,onDelete}){
   return(<div className={cat}>
     <div className="susi-row">
       <select value={entry.category} onChange={e=>set('category',e.target.value)} style={{width:64,fontWeight:600,fontSize:11}}>{['4년제','전문대'].map(c=><option key={c}>{c}</option>)}</select>
-      <input value={entry.univ||''} onChange={e=>set('univ',e.target.value)} placeholder="대학명" style={{flex:1.5,minWidth:90}}/>
       <select value={entry.jType||'교과'} onChange={e=>set('jType',e.target.value)} style={{width:56,fontSize:11}}>{['교과','종합','논술','실기','기타'].map(t=><option key={t}>{t}</option>)}</select>
+      <button style={{background:'#fee2e2',color:'#dc2626',padding:'4px 10px',fontSize:15,fontWeight:700,borderRadius:5,flexShrink:0}} onClick={()=>{if(window.confirm('이 지원 항목을 삭제하시겠습니까?'))onDelete();}}>✕</button>
+      <input value={entry.univ||''} onChange={e=>set('univ',e.target.value)} placeholder="대학명" style={{flex:1.5,minWidth:90}}/>
       <input value={entry.jName||''} onChange={e=>set('jName',e.target.value)} placeholder="전형명" style={{flex:1.5,minWidth:90}}/>
       <input value={entry.major||''} onChange={e=>set('major',e.target.value)} placeholder="학과명" style={{flex:2,minWidth:90}}/>
       <input value={entry.capacity||''} onChange={e=>set('capacity',e.target.value)} placeholder="인원" style={{width:44,textAlign:'center'}}/>
-      <button style={{background:'none',color:'var(--gray-300)',padding:'4px 6px',fontSize:14}} onClick={onDelete}>✕</button>
     </div>
     <div className="susi-row" style={{marginBottom:4}}>
       <span style={{fontSize:11,color:'var(--gray-500)',whiteSpace:'nowrap',fontWeight:600}}>전형요소</span>
@@ -598,8 +606,8 @@ function PrintView({data,cls}){
 /* ── Student Detail ── */
 function StudentDetail({student,onSave,onBack,cls,isTeacher}){
   const [data,setData]=useState(student);const [saving,setSaving]=useState(false);const [status,setStatus]=useState('idle');
-  const [counselReq,setCounselReq]=useState(null);const [counselSlot,setCounselSlot]=useState(null);const [recordText,setRecordText]=useState('');const [recordPeriod,setRecordPeriod]=useState('');const [recordSaving,setRecordSaving]=useState(false);
-  useEffect(()=>{setData(student);setStatus('idle');},[student.studentNumber]);
+  const [counselReq,setCounselReq]=useState(null);const [counselSlot,setCounselSlot]=useState(null);const [recordText,setRecordText]=useState('');const [recordPeriod,setRecordPeriod]=useState('');const [recordDate,setRecordDate]=useState('');const [recordSaving,setRecordSaving]=useState(false);
+  useEffect(()=>{setData(student);setStatus('idle');const today=new Date().toISOString().split('T')[0];setRecordDate(counselSlot?.date||today);},[student.studentNumber]);
   useEffect(()=>{
     if(!isTeacher||!cls||!student.studentNumber)return;
     const unsub=clsRef(cls).collection('requests').doc(student.studentNumber).onSnapshot(async doc=>{
@@ -616,7 +624,7 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
   const toggleCompleted=async()=>{const next={...data,completed:!data.completed};setData(next);try{await onSave(next);}catch(e){alert('상담 완료 저장 실패: '+e.message);}};
   const saveCounselRecord=async()=>{
     if(!recordText.trim()){alert('상담 내용을 입력하세요.');return;}
-    const record={id:uid(),date:counselSlot?.date||data.counselingDate||'',round:counselReq?.round||data.counselingRound||1,period:recordPeriod,content:recordText.trim(),savedAt:new Date().toISOString()};
+    const record={id:uid(),date:recordDate||counselSlot?.date||data.counselingDate||new Date().toISOString().split('T')[0],round:counselReq?.round||data.counselingRound||1,period:recordPeriod,content:recordText.trim(),savedAt:new Date().toISOString()};
     const next={...data,counselingDate:record.date,counselingRound:record.round,counselingRecords:[record,...(data.counselingRecords||[])]};
     setRecordSaving(true);
     try{await onSave(next);setData(next);setRecordText('');}
@@ -648,19 +656,19 @@ function StudentDetail({student,onSave,onBack,cls,isTeacher}){
         <div><div className="field-label">학번</div><input value={data.studentNumber||''} readOnly style={{width:90,background:'var(--gray-50)'}}/></div>
         <div><div className="field-label">이름</div><input value={data.name||''} readOnly style={{width:90,background:'var(--gray-50)'}}/></div>
         {isTeacher&&<><div><div className="field-label">상담일자</div><input type="date" value={data.counselingDate||''} onChange={e=>update('counselingDate',e.target.value)}/></div>
-        <div style={{flex:2,minWidth:200}}><div className="field-label">특이사항</div><input value={data.specialNote||''} onChange={e=>update('specialNote',e.target.value)} style={{width:'100%'}}/></div></>}
+        </>}
         {!isTeacher&&<div style={{flex:1,minWidth:200}}><div className="field-label">메모 (궁금한 점 등)</div><input value={data.studentNote||''} onChange={e=>update('studentNote',e.target.value)} style={{width:'100%'}}/></div>}
       </div>
       {isTeacher&&<div className="section-box">
         <div className="section-title">상담 누적 기록</div>
         <div style={{display:'grid',gridTemplateColumns:'140px 80px 80px 1fr auto',gap:8,alignItems:'end',marginBottom:10}}>
-          <div><div className="field-label">상담일자</div><input value={counselSlot?.date||data.counselingDate||''} readOnly style={{width:'100%',background:'var(--gray-50)'}}/></div>
+          <div><div className="field-label">일자 <span style={{fontSize:10,color:'var(--gray-400)'}}>자동·수정가능</span></div><input type="date" value={recordDate||''} onChange={e=>setRecordDate(e.target.value)} style={{width:'100%'}}/></div>
           <div><div className="field-label">회차</div><input value={`${counselReq?.round||data.counselingRound||1}회차`} readOnly style={{width:'100%',background:'var(--gray-50)',textAlign:'center',fontWeight:700}}/></div>
-          <div><div className="field-label">교시</div><select value={recordPeriod} onChange={e=>setRecordPeriod(e.target.value)} style={{width:'100%'}}>
+          <div><div className="field-label">교시 <span style={{fontSize:10,color:'var(--gray-400)'}}>자동</span></div><select value={recordPeriod} onChange={e=>setRecordPeriod(e.target.value)} style={{width:'100%'}}>
             <option value="">-</option>
             {[1,2,3,4,5,6,7].map(n=><option key={n} value={`${n}교시`}>{n}교시</option>)}
           </select></div>
-          <div style={{gridColumn:'1 / -1'}}><div className="field-label">상담 내용</div><textarea value={recordText} onChange={e=>setRecordText(e.target.value)} placeholder="상담 내용을 입력하세요 (줄바꿈 가능)" rows={3} style={{width:'100%',resize:'vertical',lineHeight:1.6,padding:'6px 8px',border:'1px solid var(--gray-300)',borderRadius:5,fontFamily:'inherit',fontSize:12}}/></div>
+          <div style={{gridColumn:'1 / -1'}}><div className="field-label">상담 내용</div><textarea value={recordText} onChange={e=>setRecordText(e.target.value)} placeholder="상담 내용을 입력하세요" rows={3} style={{width:'100%',resize:'vertical',lineHeight:1.6,padding:'6px 8px',border:'1px solid var(--gray-300)',borderRadius:5,fontFamily:'inherit',fontSize:12}}/></div>
           <button onClick={saveCounselRecord} disabled={recordSaving} style={{background:'var(--primary)',color:'white',fontWeight:700,padding:'7px 14px',borderRadius:6,gridColumn:'1 / -1'}}>{recordSaving?'저장 중...':'💾 상담 내용 저장'}</button>
         </div>
         {(data.counselingRecords||[]).length===0?<div style={{fontSize:12,color:'var(--gray-400)',textAlign:'center',padding:'12px',background:'var(--gray-50)',borderRadius:6}}>저장된 상담 기록이 없습니다</div>:
@@ -849,7 +857,7 @@ function ScheduleModal({cls,onClose}){
 
     {/* 탭 */}
     <div style={{display:'flex',gap:6,marginBottom:12}}>
-      {[['slots',`전체 일정 (${slots.length})`],['pending',`신청 대기 (${pending.length})`],['confirmed',`확정 (${confirmed.length})`],['rounds',`상담 회차 (${roundRows.length})`]].map(([k,l])=>(
+      {[['slots',`전체 일정 (${slots.length})`],['pending',`확정 대기 (${pending.length})`],['confirmed',`확정 (${confirmed.length})`],['rounds',`상담 회차 (${roundRows.length})`]].map(([k,l])=>(
         <button key={k} className={`tab ${tab===k?'active':''}`} onClick={()=>setTab(k)}>{l}</button>))}
     </div>
 
@@ -958,9 +966,8 @@ function ScheduleSection({studentNumber,studentName,cls}){
       await db.runTransaction(async tx=>{
         const requestDoc=await tx.get(requestRef);
         const prevReq=requestDoc.exists?requestDoc.data():{};
-        if(prevReq.status==='confirmed'&&prevReq.confirmedSlotId&&prevReq.confirmedSlotId!==slotId){
-          throw new Error('이미 확정된 일정은 변경할 수 없습니다. 선생님께 문의하세요.');
-        }
+        // 이전 확정 슬롯이 있으면 해제
+        
         const prevSlots=(prevReq.requestedSlots||[]).filter(id=>id&&id!==slotId);
         const slotRef=clsRef(cls).collection('slots').doc(slotId);
         const slotDoc=await tx.get(slotRef);
@@ -976,13 +983,13 @@ function ScheduleSection({studentNumber,studentName,cls}){
           name:studentName,
           requestedSlots:[slotId],
           studentNote:memo,
-          status:prevReq.status==='confirmed'?'confirmed':'pending',
-          confirmedSlotId:prevReq.status==='confirmed'?prevReq.confirmedSlotId:'',
+          status:'confirmed',
+          confirmedSlotId:slotId,
           round:prevReq.round||1,
           updatedAt:firebase.firestore.FieldValue.serverTimestamp()
         },{merge:true});
       });
-      alert('신청 완료!');
+      alert('일정이 확정되었습니다!');
     }catch(e){
       console.error(e);alert('상담 신청 저장 실패: '+(e.message||e));
     }finally{setSaving(false);}
@@ -1041,7 +1048,7 @@ function ScheduleSection({studentNumber,studentName,cls}){
     <div style={{marginBottom:10}}><div className="field-label">메모 (선생님께 전달할 말)</div>
       <input value={memo} onChange={e=>setMemo(e.target.value)} placeholder="예) 제 등급으로 갈 수 있는 대학이 궁금해요" style={{width:'100%'}}/></div>
     <button onClick={submit} disabled={saving||selected.length===0} style={{width:'100%',padding:'10px',background:selected.length>0?'var(--primary)':'var(--gray-200)',color:selected.length>0?'white':'var(--gray-400)',fontWeight:700,borderRadius:7,fontSize:13}}>
-      {saving?'신청 중...':'선택한 일정 신청하기'}
+      {saving?'저장 중...':'일정 선택 완료'}
     </button>
     </>}
   </div>);}
@@ -1143,22 +1150,20 @@ function TeacherDashboard({user,onLogout,profile}){
 
   return(<div style={{minHeight:'100vh',background:'var(--gray-50)'}}>
     <div className="header"><div style={{maxWidth:1300,margin:'0 auto'}}>
-      <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:10}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <h1 style={{fontSize:16,fontWeight:700}}>🎓 수시·정시 상담 관리 <span style={{fontSize:11,opacity:.7}}>선생님</span></h1>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:6,flexWrap:'nowrap'}}>
-          <span style={{fontSize:12,fontWeight:700,background:'rgba(255,255,255,.18)',border:'1px solid rgba(255,255,255,.25)',padding:'5px 10px',borderRadius:6,whiteSpace:'nowrap'}}>{teacherName}</span>
-          {!profile?.isGoogleAdmin&&<button onClick={()=>setPwModal(true)} style={{background:'rgba(255,255,255,.2)',color:'white',padding:'5px 12px',fontSize:12,whiteSpace:'nowrap',flex:1,textAlign:'center'}}>비밀번호 변경</button>}
-          <button onClick={onLogout} style={{background:'rgba(255,255,255,.2)',color:'white',padding:'5px 12px',fontSize:12,whiteSpace:'nowrap',flex:1,textAlign:'center'}}>로그아웃</button>
-        </div>
+      <div style={{marginBottom:8}}>
+        <h1 style={{fontSize:16,fontWeight:700}}>🎓 수시·정시 상담 관리 <span style={{fontSize:11,opacity:.7}}>선생님</span></h1>
       </div>
-      {/* 반 선택 탭 */}
-      <div className="cls-tabs">
+      {/* 반 선택 탭 + 메뉴 한줄 */}
+      <div style={{display:'flex',alignItems:'center',gap:4,flexWrap:'wrap'}}>
         {accessibleClasses.map(n=>(
           <button key={n} className={`cls-tab ${currentCls===n?'active':''}`} onClick={()=>setCurrentCls(n)}>
             {n}반
           </button>))}
+        <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:6,flexWrap:'nowrap'}}>
+          <span style={{fontSize:12,fontWeight:700,background:'rgba(255,255,255,.18)',border:'1px solid rgba(255,255,255,.25)',padding:'4px 8px',borderRadius:6,whiteSpace:'nowrap'}}>{teacherName}</span>
+          {!profile?.isGoogleAdmin&&<button onClick={()=>setPwModal(true)} style={{background:'rgba(255,255,255,.2)',color:'white',padding:'4px 10px',fontSize:11,whiteSpace:'nowrap',borderRadius:5}}>비밀번호 변경</button>}
+          <button onClick={onLogout} style={{background:'rgba(255,255,255,.2)',color:'white',padding:'4px 10px',fontSize:11,whiteSpace:'nowrap',borderRadius:5}}>로그아웃</button>
+        </div>
       </div>
     </div></div>
 
@@ -1176,11 +1181,7 @@ function TeacherDashboard({user,onLogout,profile}){
         <button onClick={()=>setScheduleModal(true)} style={{background:'#0369a1',color:'white',fontWeight:600,padding:'7px 12px',fontSize:12,borderRadius:6}}>📅 상담 일정</button>
         <button onClick={printAllAccounts} style={{background:'#0f766e',color:'white',fontWeight:600,padding:'7px 12px',fontSize:12,borderRadius:6}}>🖨️ 계정카드 인쇄</button>
         <button onClick={()=>setBulkModal(true)} style={{background:'#7c3aed',color:'white',fontWeight:700,padding:'7px 14px',fontSize:12,borderRadius:6}}>🔑 계정 생성 ({students.filter(s=>!s.authUid).length}명)</button>
-        <details style={{display:'inline'}}><summary style={{background:'var(--gray-200)',color:'var(--gray-500)',padding:'7px 10px',fontSize:11,borderRadius:6,cursor:'pointer',listStyle:'none'}}>⚙</summary>
-          <div style={{position:'absolute',right:24,background:'white',border:'1px solid var(--gray-200)',borderRadius:8,padding:8,boxShadow:'0 4px 12px rgba(0,0,0,.1)',zIndex:100}}>
-            <button onClick={resetAuthUids} style={{background:'#fef2f2',color:'#dc2626',fontWeight:600,padding:'8px 14px',fontSize:12,borderRadius:6,width:'100%'}}>🔄 authUid 초기화 (Auth 계정 삭제 후 사용)</button>
-          </div>
-        </details>
+        
       </div>
     </div>
 
