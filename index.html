@@ -1273,7 +1273,12 @@ function App(){
     }
     const tNum=teacherNumberFromUser(u);
     if(tNum){
-      const doc=await db.collection('teachers').doc(tNum).get();
+      let doc=await db.collection('teachers').doc(tNum).get();
+      if(!doc.exists)doc=await db.collection('teachers').doc(u.uid).get();
+      if(!doc.exists){
+        const byUid=await db.collection('teachers').where('uid','==',u.uid).limit(1).get();
+        if(!byUid.empty)doc=byUid.docs[0];
+      }
       if(doc.exists){
         const grade=gradeFromNumber(tNum);const cls=parseInt(tNum.slice(1,3),10);
         setTeacherProfile({...doc.data(),teacherNumber:tNum,grade,role:'teacher',classes:[cls],cls});
@@ -1288,10 +1293,12 @@ function App(){
     try{
       initFirebase(cfg);setProjectId(cfg.projectId);
       localStorage.setItem('fbConfig',JSON.stringify(cfg));
+      const authFallback=setTimeout(()=>setScreen(s=>s==='loading'?'login':s),5000);
       const unsub=auth.onAuthStateChanged(u=>{
+        clearTimeout(authFallback);
         resolveUser(u).catch(e=>{console.error(e);setUser(null);setRole(null);setTeacherProfile(null);setScreen('login');});
       });
-      return()=>unsub();
+      return()=>{clearTimeout(authFallback);unsub();};
     }catch(e){console.error('Firebase 오류:',e);setScreen('config');}
   },[]);
   const handleConfig=cfg=>{initFirebase(cfg);setProjectId(cfg.projectId);auth.onAuthStateChanged(u=>{resolveUser(u).catch(e=>{console.error(e);setScreen('login');});});};
